@@ -1,0 +1,37 @@
+[project]
+name = "agent-template"
+version = "0.1.0"
+description = "Opinionated general-purpose AI agent template"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-ai>=2.1.0",
+    "pydantic-settings>=2.0",
+    "logfire>=3.0",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pydantic-evals>=2.1.0",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "eval: marks tests as evals (require an API key; run with -m eval, skipped by default)",
+]
+addopts = "-m 'not eval'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent"]

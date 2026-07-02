@@ -1,0 +1,27 @@
+[
+  {
+    "name": "basic_greeting",
+    "inputs": {"user_input": "Hello, how are you?"},
+    "metadata": {
+      "expected_topics": ["greeting", "response"],
+      "difficulty": "easy"
+    }
+  },
+  {
+    "name": "factual_question",
+    "inputs": {"user_input": "What is the capital of France?"},
+    "expected_output": "Paris",
+    "metadata": {
+      "expected_topics": ["geography", "factual"],
+      "difficulty": "easy"
+    }
+  },
+  {
+    "name": "complex_task",
+    "inputs": {"user_input": "Summarize the key benefits of async programming in Python."},
+    "metadata": {
+      "expected_topics": ["python", "async", "concurrency"],
+      "difficulty": "medium"
+    }
+  }
+]
