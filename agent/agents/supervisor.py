@@ -22,11 +22,18 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+# Guardrail against runaway agentic loops. A run that exceeds either limit
+# raises UsageLimitExceeded instead of silently burning tokens. Worker runs
+# share the supervisor's budget (see delegate_to_worker_a), so this bounds
+# the whole delegation tree, not just the supervisor's own requests.
+USAGE_LIMITS = UsageLimits(request_limit=10, total_tokens_limit=100_000)
 
 
 # --- Shared dependencies ---
@@ -57,7 +64,9 @@ worker_agent_a: Agent[SharedDeps, WorkerAOutput] = Agent(
 
 # --- Supervisor agent ---
 class SupervisorOutput(BaseModel):
-    final_result: str
+    # `result` is the canonical output field shared by all three stubs —
+    # keep it (or rename it consistently) so evals/ stays pattern-agnostic.
+    result: str
     steps_taken: list[str]
 
 
@@ -85,7 +94,11 @@ async def delegate_to_worker_a(ctx: RunContext[SharedDeps], task: str) -> str:
         The worker's result as a string.
     """
     logger.info("Delegating to worker A", extra={"task": task})
-    result = await worker_agent_a.run(task, deps=ctx.deps)
+    # usage=ctx.usage makes the worker's spend count against the supervisor
+    # run's shared budget — the standard pydantic-ai delegation pattern.
+    result = await worker_agent_a.run(
+        task, deps=ctx.deps, usage=ctx.usage, usage_limits=USAGE_LIMITS
+    )
     return result.output.result
 
 
@@ -96,7 +109,7 @@ async def run_supervisor(user_input: str) -> SupervisorOutput:
     """Run the supervisor agent to coordinate workers on a task."""
     deps = SharedDeps()
     logger.info("Running supervisor agent", extra={"user_input": user_input})
-    result = await supervisor_agent.run(user_input, deps=deps)
+    result = await supervisor_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
     return result.output
 
 

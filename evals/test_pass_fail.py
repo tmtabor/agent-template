@@ -4,9 +4,13 @@ These evals test for specific, verifiable outputs.
 Run with: uv run pytest -m eval
 """
 
-import pytest
+from dataclasses import dataclass
 
-from agent.agents.single import run_agent
+import pytest
+from pydantic_evals import Case, Dataset
+from pydantic_evals.evaluators import Evaluator, EvaluatorContext
+
+from agent.agents import run_agent
 
 
 @pytest.mark.eval
@@ -26,26 +30,51 @@ async def test_agent_handles_empty_ish_input():
     assert output is not None
 
 
+# --- Dataset eval driven by evals/fixtures/example.json ---
+
+
+@dataclass
+class ContainsExpected(Evaluator[str, str]):
+    """Pass if the expected output appears in the answer (case-insensitive).
+
+    Cases without an expected_output just need a non-empty answer.
+    """
+
+    def evaluate(self, ctx: EvaluatorContext[str, str]) -> bool:
+        if ctx.expected_output is None:
+            return bool(ctx.output and ctx.output.strip())
+        return ctx.expected_output.lower() in ctx.output.lower()
+
+
 @pytest.mark.eval
 @pytest.mark.asyncio
-async def test_agent_confidence_in_range():
-    """Agent output confidence should be between 0 and 1."""
-    output = await run_agent("What is 2 + 2?")
-    assert 0.0 <= output.confidence <= 1.0
+async def test_fixture_dataset(example_fixtures: list[dict]):
+    """Run every case in evals/fixtures/example.json through the agent.
 
+    Add cases to that JSON file to grow this eval — no code changes needed
+    unless a case requires a new kind of check, in which case add an
+    Evaluator like ContainsExpected above.
+    """
+    dataset = Dataset(
+        cases=[
+            Case(
+                name=fixture["name"],
+                inputs=fixture["inputs"]["user_input"],
+                expected_output=fixture.get("expected_output"),
+                metadata=fixture.get("metadata"),
+            )
+            for fixture in example_fixtures
+        ],
+        evaluators=[ContainsExpected()],
+    )
 
-# --- pydantic_evals Dataset pattern ---
-# For more structured evals with datasets, use this pattern:
-#
-# from pydantic_evals import Dataset, Case
-#
-# dataset = Dataset(cases=[
-#     Case(name="greeting", inputs={"user_input": "Hello!"}, expected_output=...),
-#     Case(name="math", inputs={"user_input": "What is 2+2?"}, expected_output=...),
-# ])
-#
-# @pytest.mark.eval
-# async def test_dataset():
-#     report = await dataset.evaluate(lambda inputs: run_agent(inputs["user_input"]))
-#     report.print(include_input=True, include_output=True, include_scores=True)
-#     assert report.averages().total_score >= 0.8
+    async def task(user_input: str) -> str:
+        output = await run_agent(user_input)
+        return output.result
+
+    report = await dataset.evaluate(task)
+    report.print(include_input=True, include_output=True)
+
+    averages = report.averages()
+    assert averages is not None
+    assert averages.assertions == 1.0, "One or more eval cases failed — see the report above."

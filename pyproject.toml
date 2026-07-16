@@ -2,6 +2,7 @@
 name = "agent-template"
 version = "0.1.0"
 description = "Opinionated general-purpose AI agent template"
+license = "BSD-3-Clause"
 requires-python = ">=3.13"
 dependencies = [
     "pydantic-ai>=2.1.0",

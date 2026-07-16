@@ -7,7 +7,7 @@ Import it from: from pydantic_ai.models.test import TestModel
 import pytest
 from pydantic_ai.models.test import TestModel
 
-from agent.agents.single import AgentDeps, agent
+from agent.agents import AgentDeps, agent
 
 
 @pytest.mark.asyncio
@@ -32,7 +32,7 @@ async def test_agent_message_history():
     """Demonstrate multi-turn conversation history pattern."""
     with agent.override(model=TestModel()):
         result1 = await agent.run("First message", deps=AgentDeps())
-        history = result1.all_messages()  # all_messages() — see single.py multi-turn note
+        history = result1.all_messages()  # all_messages(), not new_messages() — keeps all turns
 
         result2 = await agent.run(
             "Follow-up message",

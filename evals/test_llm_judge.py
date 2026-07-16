@@ -7,7 +7,7 @@ Run with: uv run pytest -m eval  (runs alongside the pass/fail evals)
 
 import pytest
 
-from agent.agents.single import run_agent
+from agent.agents import run_agent
 from evals.judge import judge_response
 
 

@@ -21,12 +21,19 @@ from pydantic_ai import (  # noqa: F401 — RunContext used in commented tool ex
     Agent,
     RunContext,
 )
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import configure_logging, get_logger
 from agent.prompts.templates import load_prompt
 
 logger = get_logger(__name__)
+
+# Guardrail against runaway agentic loops. A run that exceeds either limit
+# raises UsageLimitExceeded instead of silently burning tokens. Tune per task:
+# request_limit caps model round-trips (each tool-call iteration is one
+# request), total_tokens_limit caps overall spend for the run.
+USAGE_LIMITS = UsageLimits(request_limit=10, total_tokens_limit=100_000)
 
 
 # --- Output type ---
@@ -89,7 +96,7 @@ async def run_agent(user_input: str, deps: AgentDeps | None = None) -> AgentOutp
 
     logger.info("Running single agent", extra={"user_input": user_input})
 
-    result = await agent.run(user_input, deps=deps)
+    result = await agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
 
     logger.info("Agent run complete", extra={"output": result.output})
     return result.output

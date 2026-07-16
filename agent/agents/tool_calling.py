@@ -19,11 +19,18 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+# Guardrail against runaway agentic loops. A run that exceeds either limit
+# raises UsageLimitExceeded instead of silently burning tokens. Tune per task:
+# request_limit caps model round-trips (each tool-call iteration is one
+# request), total_tokens_limit caps overall spend for the run.
+USAGE_LIMITS = UsageLimits(request_limit=10, total_tokens_limit=100_000)
 
 
 # --- Dependencies ---
@@ -39,7 +46,9 @@ class ToolAgentDeps:
 
 # --- Output type ---
 class ToolAgentOutput(BaseModel):
-    answer: str
+    # `result` is the canonical output field shared by all three stubs —
+    # keep it (or rename it consistently) so evals/ stays pattern-agnostic.
+    result: str
     # Pydantic deep-copies mutable defaults, so a plain [] is safe here.
     # Do NOT use dataclasses.field() inside a BaseModel — it is not a
     # Pydantic construct (use pydantic.Field(default_factory=...) if needed).
@@ -96,7 +105,7 @@ async def run_tool_agent(user_input: str) -> ToolAgentOutput:
     """Run the tool-calling agent."""
     deps = ToolAgentDeps()
     logger.info("Running tool-calling agent", extra={"user_input": user_input})
-    result = await tool_agent.run(user_input, deps=deps)
+    result = await tool_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
     return result.output
 
 
