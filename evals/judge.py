@@ -38,6 +38,7 @@ class JudgeVerdict:
 
 judge_agent: Agent[None, JudgeScore] = Agent(
     settings.judge_model,
+    name="judge",  # labels this agent's run span in Logfire traces
     output_type=JudgeScore,
     instructions="""You are an impartial evaluator assessing AI agent outputs.
 

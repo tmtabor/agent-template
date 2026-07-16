@@ -12,7 +12,6 @@ from evals.judge import judge_response
 
 
 @pytest.mark.eval
-@pytest.mark.asyncio
 async def test_agent_quality_judge():
     """LLM judge evaluates response quality."""
     task = "Explain what an AI agent is in one sentence."
@@ -32,7 +31,6 @@ async def test_agent_quality_judge():
 
 
 @pytest.mark.eval
-@pytest.mark.asyncio
 async def test_agent_relevance_judge():
     """LLM judge evaluates whether response is relevant to the task."""
     task = "List three benefits of Python for data science."

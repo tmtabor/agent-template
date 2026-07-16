@@ -14,6 +14,8 @@ uv run ruff format .           # format
 
 There is no separate `llm_judge` marker. Everything in `evals/` carries only `@pytest.mark.eval`, so `-m eval` runs it all in one shot — there's no cheaper eval-only subset to reach for.
 
+`asyncio_mode = "auto"` is set in `pyproject.toml`, so async tests need no `@pytest.mark.asyncio` decorator — don't add them back.
+
 ## Making it yours
 
 The intended customization sequence, roughly in order:
@@ -27,7 +29,7 @@ The intended customization sequence, roughly in order:
 
 ## Non-obvious architecture
 
-- **`agent/config.py` validates at import time, not at call time.** `Settings` has a `model_validator` that raises immediately if the provider implied by `MODEL` (`anthropic:`/`openai:` prefix) has no matching API key set. `ollama:` models are exempt — no key required. This means `import agent.config` (or anything that imports it transitively) can fail before any code runs, which is the point — but it's also why every module under `agent/` needs *some* key present at import time, even for code paths that never call the model.
+- **`agent/config.py` validates at import time, not at call time.** `Settings` has a `model_validator` that raises immediately if the provider implied by `AGENT_MODEL` (`anthropic:`/`openai:` prefix) has no matching API key set. `ollama:` models are exempt — no key required. Agent-specific env vars carry an `AGENT_` prefix; API keys and `LOGFIRE_TOKEN` deliberately don't, because the provider SDKs read those standard names directly. This means `import agent.config` (or anything that imports it transitively) can fail before any code runs, which is the point — but it's also why every module under `agent/` needs *some* key present at import time, even for code paths that never call the model.
 
 - **Unit tests never need real credentials — two layers guarantee it.** `tests/conftest.py` calls `os.environ.setdefault("ANTHROPIC_API_KEY", ...)` / `OPENAI_API_KEY` *before* importing anything from `agent/` (satisfying the import-time validator), and an autouse fixture overrides every `Agent` under `agent.agents` — including nested worker agents — with `TestModel`, so no unit test can ever hit a real model API. Don't remove either — together they're the reason `uv run pytest` works with zero setup and zero spend. `evals/conftest.py` deliberately does **neither**: a missing key there should fail loudly, since evals make real API calls anyway.
 

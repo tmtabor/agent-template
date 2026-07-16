@@ -54,6 +54,7 @@ class WorkerAOutput(BaseModel):
 
 worker_agent_a: Agent[SharedDeps, WorkerAOutput] = Agent(
     settings.model,
+    name="worker_a",  # labels this agent's run span in Logfire traces
     output_type=WorkerAOutput,
     deps_type=SharedDeps,
     instructions="You are a specialist in [TASK TYPE A]. [Add specific instructions.]",
@@ -72,6 +73,7 @@ class SupervisorOutput(BaseModel):
 
 supervisor_agent: Agent[SharedDeps, SupervisorOutput] = Agent(
     settings.model,
+    name="supervisor",
     output_type=SupervisorOutput,
     deps_type=SharedDeps,
     instructions="""You are a supervisor coordinating specialized workers.
@@ -105,9 +107,15 @@ async def delegate_to_worker_a(ctx: RunContext[SharedDeps], task: str) -> str:
 # Add more delegation tools for other workers
 
 
-async def run_supervisor(user_input: str) -> SupervisorOutput:
-    """Run the supervisor agent to coordinate workers on a task."""
-    deps = SharedDeps()
+async def run_supervisor(user_input: str, deps: SharedDeps | None = None) -> SupervisorOutput:
+    """Run the supervisor agent to coordinate workers on a task.
+
+    Args:
+        user_input: The user's message or task description.
+        deps: Runtime dependencies. Created with defaults if not provided.
+    """
+    if deps is None:
+        deps = SharedDeps()
     logger.info("Running supervisor agent", extra={"user_input": user_input})
     result = await supervisor_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
     return result.output

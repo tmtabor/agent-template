@@ -62,15 +62,18 @@ evals/    # Pass/fail + dataset + LLM-as-judge evals — real API calls, run wit
 
 ## Configuration
 
-All settings are read from the environment (see `.env.example`). Key ones:
+All settings are read from the environment (see `.env.example`). Agent-specific
+variables carry an `AGENT_` prefix so a generic name like `MODEL` in your shell
+can't silently change the provider; API keys and `LOGFIRE_TOKEN` keep their
+standard names because the provider SDKs read those exact variables directly.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | Required for whichever provider `MODEL` uses. `Settings` validates this at import time and raises immediately if it's missing — not a lazy/runtime check. |
-| `MODEL` | `anthropic:claude-opus-4-8` | The agent under test. Any pydantic-ai model string works, including `ollama:*` for local models (no API key needed). |
-| `JUDGE_MODEL` | `anthropic:claude-sonnet-5` | Used only by the LLM-as-judge evals. Kept separate from `MODEL` to avoid self-assessment bias — keep it at least as capable as `MODEL`, not cheaper. |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | Required for whichever provider `AGENT_MODEL` uses. `Settings` validates this at import time and raises immediately if it's missing — not a lazy/runtime check. |
+| `AGENT_MODEL` | `anthropic:claude-opus-4-8` | The agent under test. Any pydantic-ai model string works, including `ollama:*` for local models (no API key needed). |
+| `AGENT_JUDGE_MODEL` | `anthropic:claude-sonnet-5` | Used only by the LLM-as-judge evals. Kept separate from `AGENT_MODEL` to avoid self-assessment bias — keep it at least as capable as the agent model, not cheaper. |
 | `LOGFIRE_TOKEN` | unset | If set, traces go to Logfire cloud. If unset, traces print to the console — no separate dev-mode flag needed. |
-| `LOG_LEVEL` | `INFO` | Standard Python logging level. |
+| `AGENT_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 
 ## Agent patterns
 

@@ -58,6 +58,7 @@ class ToolAgentOutput(BaseModel):
 # --- Agent ---
 tool_agent: Agent[ToolAgentDeps, ToolAgentOutput] = Agent(
     settings.model,
+    name="tool_agent",  # labels this agent's run span in Logfire traces
     output_type=ToolAgentOutput,
     deps_type=ToolAgentDeps,
     instructions="""You are an agent with access to tools.
@@ -101,9 +102,15 @@ async def example_tool(ctx: RunContext[ToolAgentDeps], query: str) -> str:
         raise
 
 
-async def run_tool_agent(user_input: str) -> ToolAgentOutput:
-    """Run the tool-calling agent."""
-    deps = ToolAgentDeps()
+async def run_tool_agent(user_input: str, deps: ToolAgentDeps | None = None) -> ToolAgentOutput:
+    """Run the tool-calling agent.
+
+    Args:
+        user_input: The user's message or task description.
+        deps: Runtime dependencies. Created with defaults if not provided.
+    """
+    if deps is None:
+        deps = ToolAgentDeps()
     logger.info("Running tool-calling agent", extra={"user_input": user_input})
     result = await tool_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
     return result.output

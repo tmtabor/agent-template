@@ -59,6 +59,7 @@ class AgentDeps:
 # --- Agent definition ---
 agent: Agent[AgentDeps, AgentOutput] = Agent(
     settings.model,
+    name="agent",  # labels this agent's run span in Logfire traces
     output_type=AgentOutput,
     deps_type=AgentDeps,
     instructions=load_prompt("system"),  # loads agent/prompts/system.txt

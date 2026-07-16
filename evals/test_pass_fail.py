@@ -14,7 +14,6 @@ from agent.agents import run_agent
 
 
 @pytest.mark.eval
-@pytest.mark.asyncio
 async def test_agent_returns_output():
     """Basic smoke test: agent runs without error and returns output."""
     output = await run_agent("Say hello.")
@@ -23,7 +22,6 @@ async def test_agent_returns_output():
 
 
 @pytest.mark.eval
-@pytest.mark.asyncio
 async def test_agent_handles_empty_ish_input():
     """Agent should handle minimal input gracefully."""
     output = await run_agent("Hi.")
@@ -47,7 +45,6 @@ class ContainsExpected(Evaluator[str, str]):
 
 
 @pytest.mark.eval
-@pytest.mark.asyncio
 async def test_fixture_dataset(example_fixtures: list[dict]):
     """Run every case in evals/fixtures/example.json through the agent.
 

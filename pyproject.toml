@@ -36,3 +36,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["agent"]
+# choose_pattern.py writes a combined aliased import ("X as A, Y as B") into
+# agent/agents/__init__.py — without this, isort flags it (I001) after any
+# pattern switch and CI goes red.
+combine-as-imports = true
