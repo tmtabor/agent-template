@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This repo is a template: a clean starting point for a production-quality Pydantic AI agent, meant to be cloned and reshaped into a specific agent. The code is the source of truth. `IMPLEMENTATION_GUIDE.md` is the historical from-scratch build spec — consult it for the rationale behind what was (and wasn't) included, but don't treat it as current documentation and don't duplicate its contents here.
+This repo is a template: a clean starting point for a production-quality Pydantic AI agent, meant to be cloned and reshaped into a specific agent. The code is the source of truth.
 
 ## Commands
 
