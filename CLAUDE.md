@@ -42,7 +42,3 @@ The intended customization sequence, roughly in order:
 - **Every run is bounded by `USAGE_LIMITS`.** Exceeding `request_limit` or `total_tokens_limit` raises `UsageLimitExceeded` rather than silently looping. If an agent legitimately needs more iterations, raise the limit in the stub — don't remove the guardrail.
 
 - **Logfire falls back to console automatically** when `LOGFIRE_TOKEN` is unset — there's no separate "dev mode" flag. If you're expecting cloud traces and only seeing console output, check `.env` for the token first.
-
-## Don't add
-
-These were deliberately left out of the template; suggesting them back in usually means re-reading `IMPLEMENTATION_GUIDE.md`'s "Do not add" rationale first: a `Makefile`, `docker-compose.yml`, a `main.py` entry point (each stub has its own `if __name__ == "__main__":`), a `base.py` for agents, a `memory/` directory (message history is handled via `message_history=`), MCP server scaffolding, or a dedicated web-search module (it's `capabilities=[WebSearch()]` on the agent, not a file).
