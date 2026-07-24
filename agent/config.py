@@ -1,5 +1,14 @@
+from dotenv import load_dotenv
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# pydantic-settings' env_file support (below) only populates the Settings
+# object, not os.environ — but pydantic-ai's provider classes (AnthropicProvider,
+# OpenAIProvider, etc.) read their API key env vars directly via os.getenv(...),
+# bypassing Settings entirely. Load .env into os.environ here too, so a key
+# set only in .env is visible to those providers. override=False (the
+# default) won't clobber real exported env vars.
+load_dotenv()
 
 
 class Settings(BaseSettings):
