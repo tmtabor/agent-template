@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Chat{% endblock %}
+{% block content %}
+<div class="chat">
+  <div id="chat-messages" class="chat-messages">
+    {% if not turns %}
+      <div class="message assistant">
+        <div class="bubble">Hi! Ask me anything to get started.</div>
+      </div>
+    {% endif %}
+    {% for turn in turns %}
+      <div class="message {{ turn.role }}">
+        <div class="bubble">{{ turn.text }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <form
+    class="chat-input"
+    hx-post="/chat"
+    hx-target="#chat-messages"
+    hx-swap="beforeend"
+    hx-on::after-request="this.reset(); document.getElementById('chat-messages').scrollTop = 1e9"
+  >
+    <textarea
+      name="message"
+      placeholder="Type a message…"
+      required
+      autofocus
+      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); this.form.requestSubmit();}"
+    ></textarea>
+    <button type="submit">
+      <span class="btn-text">Send</span>
+      <span class="spinner"></span>
+    </button>
+  </form>
+</div>
+{% endblock %}
