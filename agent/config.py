@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
 from pydantic import Field, model_validator
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.models import infer_model
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # pydantic-settings' env_file support (below) only populates the Settings
@@ -27,14 +29,14 @@ class Settings(BaseSettings):
         # a generic name like MODEL in the user's shell can't silently change
         # the provider. Fields with an explicit validation_alias are exempt.
         env_prefix="AGENT_",
+        # Provider API keys (ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_BASE_URL,
+        # …) live in .env unprefixed and undeclared here — the provider SDKs
+        # read them directly via os.getenv(...). pydantic-settings' dotenv
+        # source (unlike its env-var source) doesn't filter by env_prefix, so
+        # without "ignore" any such key would trip extra="forbid" (the
+        # BaseSettings default) before this class even finishes loading.
+        extra="ignore",
     )
-
-    # Provider API keys — required only for the provider of the selected model.
-    # These keep their standard, unprefixed names: the provider SDKs read
-    # these exact variables directly, so prefixing them would validate one
-    # variable while the model client reads another.
-    anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
-    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
 
     # Model selection — model-agnostic, defaults to Claude Opus 4.8
     model: str = "anthropic:claude-opus-4-8"
@@ -53,23 +55,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def check_provider_key(self) -> "Settings":
-        """Fail fast if the selected model's provider key is missing.
+        """Fail fast if the selected model's provider is misconfigured.
+
+        Delegates to pydantic_ai's own provider construction instead of a
+        hardcoded per-provider list — any provider pydantic_ai supports,
+        including ones added in a future pydantic_ai release, is validated
+        automatically with no changes needed here. pydantic_ai raises
+        UserError naming the exact missing env var (ANTHROPIC_API_KEY,
+        GOOGLE_API_KEY, OLLAMA_BASE_URL, …); we just fail fast with it.
 
         Only the agent model is validated here — the judge model is used
         only by evals, which require a real key at runtime anyway.
         """
-        provider = self.model.split(":", 1)[0]
-        if provider == "anthropic" and not self.anthropic_api_key:
-            raise ValueError(
-                "AGENT_MODEL is an Anthropic model but ANTHROPIC_API_KEY is not set. "
-                "Add it to .env or the environment."
-            )
-        if provider == "openai" and not self.openai_api_key:
-            raise ValueError(
-                "AGENT_MODEL is an OpenAI model but OPENAI_API_KEY is not set. "
-                "Add it to .env or the environment."
-            )
-        # "ollama" (and other local providers) run locally — no API key needed.
+        try:
+            infer_model(self.model)
+        except UserError as exc:
+            raise ValueError(f"AGENT_MODEL={self.model!r} is misconfigured: {exc}") from exc
         return self
 
 
