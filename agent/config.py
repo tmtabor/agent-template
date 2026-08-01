@@ -38,13 +38,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Model selection — model-agnostic, defaults to Claude Opus 4.8
-    model: str = "anthropic:claude-opus-4-8"
+    # Model selection — model-agnostic, defaults to Claude Sonnet 5
+    model: str = "anthropic:claude-sonnet-5"
 
     # Judge model for LLM-as-judge evals. Use a different model from the agent
     # to avoid self-assessment bias, but at least as capable — a weak judge
-    # grading a strong agent introduces its own bias.
-    judge_model: str = "anthropic:claude-sonnet-5"
+    # grading a strong agent introduces its own bias. Defaults to Opus 5,
+    # a step up from the default agent model (Sonnet 5).
+    judge_model: str = "anthropic:claude-opus-4-8"
 
     # Logfire — optional, falls back to console if not set. Unprefixed:
     # LOGFIRE_TOKEN is the standard name the Logfire SDK and CLI use.

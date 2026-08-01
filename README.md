@@ -70,8 +70,8 @@ standard names because the provider SDKs read those exact variables directly.
 | Variable | Default | Notes |
 |---|---|---|
 | Provider key (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_BASE_URL`, …) | — | Whichever variable the provider behind `AGENT_MODEL` reads. Not declared on `Settings` — `Settings` validates it by asking pydantic-ai to build that provider at import time, so any provider pydantic-ai supports (including ones added in later pydantic-ai releases) is checked automatically, and it raises immediately if misconfigured — not a lazy/runtime check. |
-| `AGENT_MODEL` | `anthropic:claude-opus-4-8` | The agent under test. Any pydantic-ai model string works, e.g. `google:gemini-2.0-flash` or `ollama:*` for local models (no API key needed, but `OLLAMA_BASE_URL` must be set). |
-| `AGENT_JUDGE_MODEL` | `anthropic:claude-sonnet-5` | Used only by the LLM-as-judge evals. Kept separate from `AGENT_MODEL` to avoid self-assessment bias — keep it at least as capable as the agent model, not cheaper. |
+| `AGENT_MODEL` | `anthropic:claude-sonnet-5` | The agent under test. Any pydantic-ai model string works, e.g. `google:gemini-2.0-flash` or `ollama:*` for local models (no API key needed, but `OLLAMA_BASE_URL` must be set). |
+| `AGENT_JUDGE_MODEL` | `anthropic:claude-opus-4-8` | Used only by the LLM-as-judge evals. Kept separate from `AGENT_MODEL` to avoid self-assessment bias — keep it at least as capable as the agent model, not cheaper. |
 | `LOGFIRE_TOKEN` | unset | If set, traces go to Logfire cloud. If unset, traces print to the console — no separate dev-mode flag needed. |
 | `AGENT_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 

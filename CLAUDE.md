@@ -35,7 +35,7 @@ The intended customization sequence, roughly in order:
 
 - **Tests and evals import canonical names from `agent/agents/__init__.py`** — `run_agent`, `AgentOutput`, `AgentDeps`, `agent` — never from a stub module directly. `scripts/choose_pattern.py` maintains the aliased import line in that file; if you edit it by hand, keep the four canonical names intact. `tests/test_stubs.py` smoke-tests each stub and auto-skips ones the script deleted.
 
-- **Two models, deliberately different.** `settings.model` (default `anthropic:claude-opus-4-8`) is the agent under test; `settings.judge_model` (default `anthropic:claude-sonnet-5`, in `evals/judge.py`) grades its output. They're kept separate to avoid self-assessment bias — but the judge should stay *at least as capable* as the agent, not cheaper/weaker, or the grading itself becomes the unreliable part.
+- **Two models, deliberately different.** `settings.model` (default `anthropic:claude-sonnet-5`) is the agent under test; `settings.judge_model` (default `anthropic:claude-opus-4-8`, in `evals/judge.py`) grades its output. They're kept separate to avoid self-assessment bias — but the judge should stay *at least as capable* as the agent, not cheaper/weaker, or the grading itself becomes the unreliable part.
 
 - **Tool error convention:** `ModelRetry` (see `agent/tools/example.py`) is reserved for errors the LLM can plausibly fix by changing its input — bad query format, out-of-range params. Anything else is logged and re-raised as a normal exception. Don't reach for `ModelRetry` as a generic catch-all; it burns the agent's retry budget on failures it has no way to correct.
 
