@@ -29,6 +29,12 @@ addopts = "-m 'not eval'"
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# Skill scaffold payloads (e.g. .agents/skills/agent-web-ui/assets/) are
+# templates copied into a *different*, future project — not this repo's own
+# source. Linting them against this project's own known-first-party list
+# (which has no idea about a "web" package that doesn't exist here) produces
+# false-positive import-order errors having nothing to do with this repo.
+extend-exclude = [".agents/skills/*/assets"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
