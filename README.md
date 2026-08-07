@@ -55,6 +55,7 @@ agent/
     └── templates.py      # load_prompt() loader
 
 scripts/choose_pattern.py   # Pick an agent pattern — deletes the other stubs, rewires imports
+scripts/add_agent.py        # Scaffold an additional, independent agent — see "Multiple agents" below
 tests/    # Unit tests against TestModel — no API calls, no API key needed
 evals/    # Pass/fail + dataset + LLM-as-judge evals — real API calls, run with -m eval
 .github/workflows/ci.yml    # CI: ruff check, format check, unit tests (no secrets needed)
@@ -92,6 +93,45 @@ The script deletes the other two stubs and rewires the canonical import in
 `AgentOutput`, `AgentDeps`, and `agent` from that package — never from a stub
 module directly — so they keep passing with zero manual edits no matter which
 pattern you choose. Run it once, right after cloning.
+
+## Multiple agents
+
+The pattern above is for the app's one *primary* agent. Some apps
+legitimately need several independent, differently-shaped agents instead —
+e.g. a content-generation app with a "newsletter" agent and a "bluesky_post"
+agent, each with its own output schema and instructions, with no shared "one
+true agent" identity. That's different from `supervisor.py`: a supervisor
+delegating to workers it controls is still one agent from the outside.
+Reach for multiple agents when, say, a UI lets a user pick between several
+unrelated agents.
+
+Scaffold one with:
+
+```bash
+uv run python scripts/add_agent.py newsletter
+```
+
+This creates `agent/agents/newsletter.py`, `agent/prompts/newsletter.txt`,
+and a smoke test — modeled on the same conventions as the pattern stubs —
+without touching `agent/agents/__init__.py`. The canonical re-export there
+(`run_agent`, `AgentOutput`, `AgentDeps`, `agent`) stays reserved for the one
+primary agent chosen by `choose_pattern.py`. Import each additional agent
+directly from its own module wherever you use it:
+
+```python
+from agent.agents.newsletter import NewsletterDeps, NewsletterOutput, newsletter_agent, run_newsletter_agent
+```
+
+A few things this doesn't automate:
+
+- **Evals** are global today — `evals/test_pass_fail.py` and
+  `evals/test_llm_judge.py` both import only the canonical `run_agent`. To
+  evaluate an additional agent, copy `evals/fixtures/example.json` to
+  `evals/fixtures/newsletter.json` and adapt the two eval files' pattern
+  into new files that import `run_newsletter_agent`.
+- **The `agent-web-ui` skill** wires its `chat.py` to the canonical
+  `from agent.agents import ...` export only. To build a UI over an
+  additional agent, point that one import line at the new module instead.
 
 ## Usage limits
 
