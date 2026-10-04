@@ -168,6 +168,12 @@ console output is controlled by `LOGFIRE_TOKEN`, see Configuration above.
   Dataset eval driven by `evals/fixtures/example.json`. Add cases to that JSON
   file to grow the eval; no code changes needed unless a case requires a new
   kind of check (then add an `Evaluator` alongside `ContainsExpected`).
+  Every case is also checked against behavioral budgets (`MaxModelRequests`,
+  `MaxToolCalls`) read from the run's OpenTelemetry spans, so it grades how the
+  agent got its answer, not just the answer. Tool-using agents can add optional
+  keys to a fixture: `expected_tools` (`["a", "b"]`, any order),
+  `expected_trajectory` (ordered tool names, scored by F1) and
+  `expected_arguments` (`{"tool": "a", "args": {"q": "x"}}`).
 - LLM-as-judge evals: `evals/test_llm_judge.py` — graded by `JUDGE_MODEL`, see Configuration above
 
 Both files share the same `@pytest.mark.eval` marker — there's no separate marker for the LLM-judge subset. `uv run pytest -m eval` runs all of them and requires a real API key; the LLM-judge evals also cost money (they make an extra model call per test to grade the output).

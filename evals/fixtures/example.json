@@ -11,6 +11,7 @@
     "name": "factual_question",
     "inputs": {"user_input": "What is the capital of France?"},
     "expected_output": "Paris",
+    "expected_tools": [],
     "metadata": {
       "expected_topics": ["geography", "factual"],
       "difficulty": "easy"
