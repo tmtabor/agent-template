@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from dotenv import load_dotenv
 from pydantic import Field, model_validator
 from pydantic_ai.exceptions import UserError
@@ -50,6 +52,13 @@ class Settings(BaseSettings):
     # Logfire — optional, falls back to console if not set. Unprefixed:
     # LOGFIRE_TOKEN is the standard name the Logfire SDK and CLI use.
     logfire_token: str | None = Field(default=None, validation_alias="LOGFIRE_TOKEN")
+
+    # Optional spend cap per run in USD (AGENT_COST_LIMIT, e.g. 0.50). Unset by
+    # default = no cost limit. Only set it for models Pydantic AI has pricing for:
+    # for others (e.g. ollama:) the cost is unknown, the cap can't be enforced, and
+    # Pydantic AI warns on every process. The request and token limits in each
+    # stub's USAGE_LIMITS apply either way.
+    cost_limit: Decimal | None = None
 
     # Logfire identity. service_name labels this app's traces — rename it per
     # project. environment (dev/staging/prod) is left unset by default so

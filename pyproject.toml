@@ -31,8 +31,6 @@ markers = [
     "eval: marks tests as evals (require an API key; run with -m eval, skipped by default)",
 ]
 addopts = "-m 'not eval'"
-# TestModel has no pricing, so a set cost_limit can never be enforced in unit tests.
-filterwarnings = ["ignore::pydantic_ai._warnings.CostNotFoundWarning"]
 
 [tool.ruff]
 line-length = 100

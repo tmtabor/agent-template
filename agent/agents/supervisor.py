@@ -19,7 +19,6 @@ To use:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
@@ -34,9 +33,12 @@ logger = get_logger(__name__)
 # Guardrail against runaway agentic loops. A run that exceeds any limit
 # raises UsageLimitExceeded instead of silently burning tokens. Worker runs
 # share the supervisor's budget (see delegate_to_worker_a), so this bounds
-# the whole delegation tree, not just the supervisor's own requests. cost_limit
-# is a USD cap, only enforced for models with known pricing.
-USAGE_LIMITS = UsageLimits(request_limit=10, total_tokens_limit=100_000, cost_limit=Decimal("0.50"))
+# the whole delegation tree, not just the supervisor's own requests. Set
+# AGENT_COST_LIMIT (USD) to add a spend cap — optional, off by default, and only
+# useful for models with known pricing (see Settings.cost_limit).
+USAGE_LIMITS = UsageLimits(
+    request_limit=10, total_tokens_limit=100_000, cost_limit=settings.cost_limit
+)
 
 
 # --- Shared dependencies ---

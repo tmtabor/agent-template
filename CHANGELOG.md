@@ -37,9 +37,10 @@ have cloned the template: what changed, and whether you need to do anything.
   `AGENT_MODEL` / `AGENT_JUDGE_MODEL` if you want the old ones.
 
 ### Added
-- `cost_limit` (USD, default `0.50`) in every stub's and scaffolded agent's `USAGE_LIMITS`.
-  It is only enforced for models with known pricing; for others (e.g. `ollama:`) a
-  `CostNotFoundWarning` is emitted and the request and token limits remain the guardrail.
+- Optional `AGENT_COST_LIMIT` (USD, e.g. `0.50`), off by default. When set it is passed as
+  `cost_limit` in every stub's and scaffolded agent's `USAGE_LIMITS`. It is only enforceable
+  for models with known pricing; leave it unset for others (e.g. `ollama:`), whose cost is
+  unknown. With no limit set, Pydantic AI emits no cost warning.
 - `ToolFailed` in the tool error convention: raise it for expected, terminal failures the
   model can work around (not found, unsupported). Unlike `ModelRetry` it spends no retry
   budget. `agent/tools/example.py` demonstrates it.

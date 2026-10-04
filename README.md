@@ -74,6 +74,7 @@ standard names because the provider SDKs read those exact variables directly.
 | `AGENT_MODEL` | `anthropic:claude-sonnet-5-5` | The agent under test. Any pydantic-ai model string works, e.g. `google:gemini-2.0-flash` or `ollama:*` for local models (no API key needed, but `OLLAMA_BASE_URL` must be set). |
 | `AGENT_JUDGE_MODEL` | `anthropic:claude-opus-5-5` | Used only by the LLM-as-judge evals. Kept separate from `AGENT_MODEL` to avoid self-assessment bias — keep it at least as capable as the agent model, not cheaper. |
 | `LOGFIRE_TOKEN` | unset | If set, traces go to Logfire cloud. If unset, traces print to the console — no separate dev-mode flag needed. |
+| `AGENT_COST_LIMIT` | unset | Optional per-run spend cap in USD (e.g. `0.50`). Off by default. Only set it for models with known pricing — for others (e.g. `ollama:`) the cost is unknown, so the cap can't be enforced and Pydantic AI warns. |
 | `AGENT_SERVICE_NAME` | `agent` | Service name on Logfire traces. Rename it for your project. |
 | `AGENT_ENVIRONMENT` | unset | Environment tag (`development`, `production`, …) on traces. Unset falls back to `LOGFIRE_ENVIRONMENT`. |
 | `AGENT_LOG_CONTENT` | `true` | Whether traces include prompts, model outputs and tool arguments. Set `false` in production if they may be sensitive. Evals force it on, since `ArgumentCorrectness` reads tool arguments from spans. |
@@ -145,7 +146,7 @@ A few things this doesn't automate:
 
 Each stub defines a `USAGE_LIMITS` constant passed to every run — a guardrail
 against runaway agentic loops. `request_limit` caps model round-trips (each
-tool-call iteration is one request); `total_tokens_limit` caps overall tokens; `cost_limit` caps spend in USD.
+tool-call iteration is one request); `total_tokens_limit` caps overall tokens. An optional spend cap in USD comes from `AGENT_COST_LIMIT` (off by default).
 Exceeding any of them raises `UsageLimitExceeded` instead of silently burning
 tokens. Tune the values in your chosen stub to fit your task; the supervisor
 shares its budget with its workers so the limit bounds the whole delegation

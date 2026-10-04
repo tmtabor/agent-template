@@ -66,7 +66,6 @@ To use:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 
 from pydantic import BaseModel
 from pydantic_ai import (  # noqa: F401 — RunContext used in commented tool example below
@@ -85,10 +84,11 @@ logger = get_logger(__name__)
 # Guardrail against runaway agentic loops. A run that exceeds any limit
 # raises UsageLimitExceeded instead of silently burning tokens. Tune per task:
 # request_limit caps model round-trips (each tool-call iteration is one
-# request), total_tokens_limit caps overall tokens, and cost_limit caps spend
-# in USD (only enforced for models with known pricing).
+# request), total_tokens_limit caps overall tokens. Set AGENT_COST_LIMIT (USD) to
+# add a spend cap — optional, off by default, and only useful for models with
+# known pricing (see Settings.cost_limit).
 USAGE_LIMITS = UsageLimits(
-    request_limit=10, total_tokens_limit=100_000, cost_limit=Decimal("0.50")
+    request_limit=10, total_tokens_limit=100_000, cost_limit=settings.cost_limit
 )
 
 
