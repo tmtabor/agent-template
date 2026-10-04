@@ -142,8 +142,8 @@ A few things this doesn't automate:
 
 Each stub defines a `USAGE_LIMITS` constant passed to every run — a guardrail
 against runaway agentic loops. `request_limit` caps model round-trips (each
-tool-call iteration is one request); `total_tokens_limit` caps overall spend.
-Exceeding either raises `UsageLimitExceeded` instead of silently burning
+tool-call iteration is one request); `total_tokens_limit` caps overall tokens; `cost_limit` caps spend in USD.
+Exceeding any of them raises `UsageLimitExceeded` instead of silently burning
 tokens. Tune the values in your chosen stub to fit your task; the supervisor
 shares its budget with its workers so the limit bounds the whole delegation
 tree.

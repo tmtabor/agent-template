@@ -24,7 +24,7 @@ The intended customization sequence, roughly in order:
 2. **Edit the system prompt:** `agent/prompts/system.txt`, loaded via `load_prompt("system")`. Add more `.txt` files beside it and load them the same way.
 3. **Define the output schema:** replace the placeholder fields on the output model in your chosen stub. Keep a `result: str` field (or rename it consistently in `evals/`) — it's the canonical field the evals read. Keep the schema as flat as the data actually requires — don't wrap a single field in its own object (e.g. prefer `list[str]` over `list[{text: str}]`) unless a second field genuinely needs to travel with it. This matters more the smaller/weaker `settings.model` is: a schema a frontier model satisfies without issue can reliably burn the retry budget on a small local model (e.g. an `ollama:` model) if it adds nesting the data doesn't need. If output validation keeps failing against the configured model, check whether the schema is more nested than necessary before assuming it's a prompting problem.
 4. **Add tools:** copy the pattern in `agent/tools/example.py`, register with `@agent.tool`.
-5. **Tune `USAGE_LIMITS`** in your stub: `request_limit` caps model round-trips per run, `total_tokens_limit` caps spend. The supervisor shares its budget with workers via `usage=ctx.usage`.
+5. **Tune `USAGE_LIMITS`** in your stub: `request_limit` caps model round-trips per run, `total_tokens_limit` caps tokens, `cost_limit` caps USD spend. The supervisor shares its budget with workers via `usage=ctx.usage`.
 6. **Grow the evals:** add cases to `evals/fixtures/example.json` (picked up by the dataset eval in `evals/test_pass_fail.py` automatically) and adapt the judge criteria in `evals/test_llm_judge.py`.
 
 ## Non-obvious architecture
@@ -39,6 +39,6 @@ The intended customization sequence, roughly in order:
 
 - **Tool error convention:** `ModelRetry` (see `agent/tools/example.py`) is reserved for errors the LLM can plausibly fix by changing its input — bad query format, out-of-range params. Anything else is logged and re-raised as a normal exception. Don't reach for `ModelRetry` as a generic catch-all; it burns the agent's retry budget on failures it has no way to correct.
 
-- **Every run is bounded by `USAGE_LIMITS`.** Exceeding `request_limit` or `total_tokens_limit` raises `UsageLimitExceeded` rather than silently looping. If an agent legitimately needs more iterations, raise the limit in the stub — don't remove the guardrail.
+- **Every run is bounded by `USAGE_LIMITS`.** Exceeding `request_limit`, `total_tokens_limit` or `cost_limit` raises `UsageLimitExceeded` rather than silently looping. `cost_limit` needs pricing data for the model: for unpriced models (e.g. `ollama:`) `RunUsage.cost` is `None`, the cap is not enforced and only a `CostNotFoundWarning` is emitted, so the request and token limits remain the real guardrail there. If an agent legitimately needs more iterations, raise the limit in the stub — don't remove the guardrail.
 
 - **Logfire falls back to console automatically** when `LOGFIRE_TOKEN` is unset — there's no separate "dev mode" flag. If you're expecting cloud traces and only seeing console output, check `.env` for the token first.
