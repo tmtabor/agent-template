@@ -119,7 +119,12 @@ primary agent chosen by `choose_pattern.py`. Import each additional agent
 directly from its own module wherever you use it:
 
 ```python
-from agent.agents.newsletter import NewsletterDeps, NewsletterOutput, newsletter_agent, run_newsletter_agent
+from agent.agents.newsletter import (
+    NewsletterDeps,
+    NewsletterOutput,
+    newsletter_agent,
+    run_newsletter_agent,
+)
 ```
 
 A few things this doesn't automate:
