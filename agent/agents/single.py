@@ -22,6 +22,7 @@ from pydantic_ai import (  # noqa: F401 — RunContext used in commented tool ex
     Agent,
     RunContext,
 )
+from pydantic_ai.capabilities import RaiseContentFilterError
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
@@ -65,6 +66,9 @@ agent: Agent[AgentDeps, AgentOutput] = Agent(
     name="agent",  # labels this agent's run span in Logfire traces
     output_type=AgentOutput,
     deps_type=AgentDeps,
+    # Fail fast when the provider filters a response, instead of retrying a
+    # refused request or returning partial text.
+    capabilities=[RaiseContentFilterError()],
     instructions=load_prompt("system"),  # loads agent/prompts/system.txt
     # Or inline: instructions="You are a helpful assistant."
 )

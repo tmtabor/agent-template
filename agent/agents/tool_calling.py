@@ -20,6 +20,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelRetry, RunContext, ToolFailed
+from pydantic_ai.capabilities import RaiseContentFilterError
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
@@ -64,6 +65,9 @@ tool_agent: Agent[ToolAgentDeps, ToolAgentOutput] = Agent(
     name="tool_agent",  # labels this agent's run span in Logfire traces
     output_type=ToolAgentOutput,
     deps_type=ToolAgentDeps,
+    # Fail fast when the provider filters a response, instead of retrying a
+    # refused request or returning partial text.
+    capabilities=[RaiseContentFilterError()],
     instructions="""You are an agent with access to tools.
 
     Use tools when you need external information or to take actions.

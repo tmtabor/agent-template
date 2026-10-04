@@ -148,6 +148,20 @@ tokens. Tune the values in your chosen stub to fit your task; the supervisor
 shares its budget with its workers so the limit bounds the whole delegation
 tree.
 
+Every agent also carries the `RaiseContentFilterError` capability, so a
+response the provider filters (safety block or refusal) raises
+`ContentFilterError` instead of being retried or returned half-finished. Like
+`UsageLimitExceeded`, it propagates out of `run_*` for the caller to handle:
+
+```python
+from pydantic_ai.exceptions import ContentFilterError
+
+try:
+    output = await run_agent(user_input)
+except ContentFilterError as e:
+    ...  # e.message has the reason; e.body has the filtered response
+```
+
 ## Adding tools
 
 Copy `agent/tools/example.py`, implement your tool, register with `@agent.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param), and `ToolFailed` for expected failures it can't fix but can work around (not found, unsupported) — log and re-raise everything else.

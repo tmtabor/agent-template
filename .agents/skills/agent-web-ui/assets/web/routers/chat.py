@@ -15,6 +15,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic_ai import UsageLimitExceeded
+from pydantic_ai.exceptions import ContentFilterError
 
 from agent.agents import USAGE_LIMITS, AgentDeps, agent
 from agent.logging import get_logger
@@ -62,6 +63,17 @@ async def chat(request: Request, message: str = Form(...)) -> HTMLResponse:
             {
                 "user_message": message,
                 "agent_message": "This conversation hit its usage limit — start a new one.",
+                "error": True,
+            },
+        )
+    except ContentFilterError:
+        return _render(
+            request,
+            session_id,
+            "partials/message_pair.html",
+            {
+                "user_message": message,
+                "agent_message": "I can't help with that request — try rephrasing it.",
                 "error": True,
             },
         )
