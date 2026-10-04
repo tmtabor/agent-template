@@ -7,6 +7,14 @@ have cloned the template: what changed, and whether you need to do anything.
 
 ## [Unreleased]
 
+### Fixed
+- Evals made with a real model failed with `RuntimeError: Event loop is closed` on every
+  test after the first. Agents are module-level, so the provider's HTTP client was bound to
+  the first test's event loop, which pytest-asyncio then closed. `pyproject.toml` now pins
+  `asyncio_default_test_loop_scope` and `asyncio_default_fixture_loop_scope` to `session`;
+  if you copied the old pytest config, add both settings. Found while running the evals
+  against a local Ollama model.
+
 ## [0.2.0] - 2026-10-04
 
 ### Upgrade notes

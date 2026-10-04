@@ -14,7 +14,7 @@ uv run ruff format .           # format
 
 There is no separate `llm_judge` marker. Everything in `evals/` carries only `@pytest.mark.eval`, so `-m eval` runs it all in one shot — there's no cheaper eval-only subset to reach for.
 
-`asyncio_mode = "auto"` is set in `pyproject.toml`, so async tests need no `@pytest.mark.asyncio` decorator — don't add them back.
+`asyncio_mode = "auto"` is set in `pyproject.toml`, so async tests need no `@pytest.mark.asyncio` decorator — don't add them back. The loop scopes are also pinned to `session` there: agents are module-level, so each provider HTTP client binds to the loop of the first test that uses it, and per-test loops (the default) make every later real model call — i.e. every eval after the first — fail with `Event loop is closed`. `tests/test_event_loop.py` guards this.
 
 ## Changelog
 

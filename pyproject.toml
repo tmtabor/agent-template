@@ -21,6 +21,12 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# One event loop for the whole session: module-level agents keep a provider HTTP
+# client that is bound to the loop it was first used in, so per-test loops make
+# every later real model call (i.e. every eval after the first) fail with
+# "Event loop is closed".
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
 markers = [
     "eval: marks tests as evals (require an API key; run with -m eval, skipped by default)",
 ]
