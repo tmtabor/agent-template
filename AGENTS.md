@@ -16,6 +16,10 @@ There is no separate `llm_judge` marker. Everything in `evals/` carries only `@p
 
 `asyncio_mode = "auto"` is set in `pyproject.toml`, so async tests need no `@pytest.mark.asyncio` decorator — don't add them back.
 
+## Changelog
+
+`CHANGELOG.md` follows Keep a Changelog and is written for people who cloned the template. Any user-visible change (new or changed setting, default, convention, scaffold output, or anything a cloner must act on) adds a line under `## [Unreleased]` **in the same commit**, grouped as Added / Changed / Fixed / Removed, with an "Upgrade notes" entry when action is required. To release: bump `version` in `pyproject.toml` (and `uv lock`), rename `[Unreleased]` to the new version with its date, add a fresh empty `[Unreleased]`, update the compare links at the bottom, and tag `vX.Y.Z`.
+
 ## Making it yours
 
 The intended customization sequence, roughly in order:
