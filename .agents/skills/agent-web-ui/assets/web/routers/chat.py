@@ -93,7 +93,7 @@ async def chat(request: Request, message: str = Form(...)) -> HTMLResponse:
     session.history = result.all_messages()
 
     # Every stub's output type keeps a `result: str` field by convention (see
-    # CLAUDE.md's "Making it yours" section) — read it directly rather than
+    # AGENTS.md's "Making it yours" section) — read it directly rather than
     # str()-ing the whole output model, which would dump every field
     # (confidence, etc.) into the chat bubble. Falls back to str() for a
     # plain `output_type=str` agent, which has no `.result` attribute.

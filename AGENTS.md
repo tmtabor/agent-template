@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This repo is a template: a clean starting point for a production-quality Pydantic AI agent, meant to be cloned and reshaped into a specific agent. The code is the source of truth.
 

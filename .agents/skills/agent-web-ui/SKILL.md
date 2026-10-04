@@ -47,7 +47,7 @@ match the house style unless the user explicitly asks for something else.
    `agent`, `run_agent` today. The UI needs `agent.run()` directly (not the
    `run_agent()` helper — it doesn't accept `message_history=`, which
    multi-turn chat needs), so it needs `USAGE_LIMITS` too, or every chat
-   turn runs unbounded, silently dropping the guardrail CLAUDE.md calls out
+   turn runs unbounded, silently dropping the guardrail AGENTS.md calls out
    as load-bearing. Add it to the existing import line and `__all__`, e.g.
    for the single-agent pattern:
 
@@ -62,7 +62,7 @@ match the house style unless the user explicitly asks for something else.
    chosen" otherwise).
 
 3. **Check the output type's `result` field.** Every stub's output model
-   keeps a `result: str` field by convention (see CLAUDE.md's "Making it
+   keeps a `result: str` field by convention (see AGENTS.md's "Making it
    yours" section). The chat router below reads `result.output.result`
    directly — if the field was renamed, either rename it back, adjust the
    router, or confirm `output_type=str` (in which case the router's
