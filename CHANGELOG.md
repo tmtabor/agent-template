@@ -7,23 +7,6 @@ have cloned the template: what changed, and whether you need to do anything.
 
 ## [Unreleased]
 
-### Changed
-- Unit tests no longer call agent tools by default. The `tests/conftest.py` safety net now
-  uses `TestModel(call_tools=[])`; a default `TestModel()` called every tool with junk
-  arguments, which failed any tool that validates input with `ModelRetry` and really ran
-  tools with side effects. Tests that want a tool executed opt in with
-  `TestModel(call_tools=["name"])` (see `SMOKE_TOOLS` in `tests/test_stubs.py` and the recipe
-  in `tests/test_safety_net.py`). If you wrote tests that relied on tools being called
-  automatically, add the opt-in.
-
-### Fixed
-- Evals made with a real model failed with `RuntimeError: Event loop is closed` on every
-  test after the first. Agents are module-level, so the provider's HTTP client was bound to
-  the first test's event loop, which pytest-asyncio then closed. `pyproject.toml` now pins
-  `asyncio_default_test_loop_scope` and `asyncio_default_fixture_loop_scope` to `session`;
-  if you copied the old pytest config, add both settings. Found while running the evals
-  against a local Ollama model.
-
 ## [0.2.0] - 2026-10-04
 
 ### Upgrade notes
@@ -31,6 +14,11 @@ have cloned the template: what changed, and whether you need to do anything.
   look for `CLAUDE.md` need an `@AGENTS.md` import or a copy.
 - **Evals:** `pydantic_evals.Dataset(...)` now requires `name=`. Add it to any dataset you
   wrote; `evals/test_pass_fail.py` already does.
+- **Unit tests no longer call agent tools by default.** If you wrote tests that relied on
+  tools being called automatically, opt in with `TestModel(call_tools=["name"])`
+  (recipe in `tests/test_safety_net.py`).
+- **If you copied the pytest config,** add `asyncio_default_test_loop_scope = "session"` and
+  `asyncio_default_fixture_loop_scope = "session"`; without them evals fail after the first.
 - **Callers of `run_*` should handle `ContentFilterError`** (see Added). It propagates
   instead of being retried or returned half-finished.
 - **Default models changed** to Sonnet 5.5 (agent) and Opus 5.5 (judge). Pin
@@ -63,10 +51,23 @@ have cloned the template: what changed, and whether you need to do anything.
   `anthropic:claude-opus-5-5` for the judge.
 - `agent/tools/example.py` search now goes through a replaceable `_search_backend()`.
 - ruff 0.16 formats Python code blocks in Markdown; the README was reformatted accordingly.
+- Unit tests no longer call agent tools by default. The `tests/conftest.py` safety net now
+  uses `TestModel(call_tools=[])`; a default `TestModel()` called every tool with junk
+  arguments, which failed any tool that validates input with `ModelRetry` and really ran
+  tools with side effects. Tests that want a tool executed opt in with
+  `TestModel(call_tools=["name"])` (see `SMOKE_TOOLS` in `tests/test_stubs.py` and the recipe
+  in `tests/test_safety_net.py`). If you wrote tests that relied on tools being called
+  automatically, add the opt-in.
 
 ### Fixed
 - `test_fixture_dataset` crashed under `pydantic-evals` 2.54 because `Dataset` requires a
   `name` (see Upgrade notes).
+- Evals made with a real model failed with `RuntimeError: Event loop is closed` on every
+  test after the first. Agents are module-level, so the provider's HTTP client was bound to
+  the first test's event loop, which pytest-asyncio then closed. `pyproject.toml` now pins
+  `asyncio_default_test_loop_scope` and `asyncio_default_fixture_loop_scope` to `session`;
+  if you copied the old pytest config, add both settings. Found while running the evals
+  against a local Ollama model.
 
 ## [0.1.0] - 2026-08-06
 
