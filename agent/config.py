@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     # LOGFIRE_TOKEN is the standard name the Logfire SDK and CLI use.
     logfire_token: str | None = Field(default=None, validation_alias="LOGFIRE_TOKEN")
 
+    # Logfire identity. service_name labels this app's traces — rename it per
+    # project. environment (dev/staging/prod) is left unset by default so
+    # Logfire falls back to LOGFIRE_ENVIRONMENT instead of this template
+    # guessing "development" and mislabelling a production deployment.
+    service_name: str = "agent"
+    environment: str | None = None
+
+    # Whether traces include prompts, model outputs and tool arguments/results.
+    # Handy in development; a data-handling decision in production. Evals force
+    # it on regardless — ArgumentCorrectness reads tool arguments from spans.
+    log_content: bool = True
+
     # Logging
     log_level: str = "INFO"
 

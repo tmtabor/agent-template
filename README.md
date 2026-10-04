@@ -74,6 +74,9 @@ standard names because the provider SDKs read those exact variables directly.
 | `AGENT_MODEL` | `anthropic:claude-sonnet-5-5` | The agent under test. Any pydantic-ai model string works, e.g. `google:gemini-2.0-flash` or `ollama:*` for local models (no API key needed, but `OLLAMA_BASE_URL` must be set). |
 | `AGENT_JUDGE_MODEL` | `anthropic:claude-opus-5-5` | Used only by the LLM-as-judge evals. Kept separate from `AGENT_MODEL` to avoid self-assessment bias — keep it at least as capable as the agent model, not cheaper. |
 | `LOGFIRE_TOKEN` | unset | If set, traces go to Logfire cloud. If unset, traces print to the console — no separate dev-mode flag needed. |
+| `AGENT_SERVICE_NAME` | `agent` | Service name on Logfire traces. Rename it for your project. |
+| `AGENT_ENVIRONMENT` | unset | Environment tag (`development`, `production`, …) on traces. Unset falls back to `LOGFIRE_ENVIRONMENT`. |
+| `AGENT_LOG_CONTENT` | `true` | Whether traces include prompts, model outputs and tool arguments. Set `false` in production if they may be sensitive. Evals force it on, since `ArgumentCorrectness` reads tool arguments from spans. |
 | `AGENT_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 
 ## Agent patterns
