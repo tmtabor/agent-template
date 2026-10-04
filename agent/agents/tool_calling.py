@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai import Agent, ModelRetry, RunContext, ToolFailed
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
@@ -88,6 +88,7 @@ async def example_tool(ctx: RunContext[ToolAgentDeps], query: str) -> str:
 
     Raises:
         ModelRetry: When the tool fails in a way the LLM can correct.
+        ToolFailed: When the tool fails in an expected, terminal way (e.g. not found).
     """
     try:
         # Replace with real implementation
@@ -98,9 +99,13 @@ async def example_tool(ctx: RunContext[ToolAgentDeps], query: str) -> str:
         raise ModelRetry(
             f"Invalid query format: {e}. Please provide a query as a plain text string."
         ) from e
+    except LookupError as e:
+        # Expected, terminal failure: the LLM can work around it but retrying
+        # won't help. ToolFailed spends no retry budget (see agent/tools/example.py).
+        raise ToolFailed(f"Nothing was found for '{query}': {e}.") from e
     except Exception as e:
-        # Unrecoverable: log and re-raise. ModelRetry is only for errors the
-        # LLM can correct by changing its input (see agent/tools/example.py).
+        # Unexpected: log and re-raise. ModelRetry is only for errors the LLM
+        # can correct by changing its input (see agent/tools/example.py).
         logger.error("Tool failed", extra={"tool": "example_tool", "error": str(e)})
         raise
 

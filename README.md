@@ -150,7 +150,7 @@ tree.
 
 ## Adding tools
 
-Copy `agent/tools/example.py`, implement your tool, register with `@agent.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param) — log and re-raise everything else.
+Copy `agent/tools/example.py`, implement your tool, register with `@agent.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param), and `ToolFailed` for expected failures it can't fix but can work around (not found, unsupported) — log and re-raise everything else.
 
 ## Customizing the prompt
 
