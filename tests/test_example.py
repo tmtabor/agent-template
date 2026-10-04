@@ -2,6 +2,10 @@
 
 TestModel simulates agent behavior for fast, deterministic unit tests.
 Import it from: from pydantic_ai.models.test import TestModel
+
+Use TestModel(call_tools=[]) for agent-level tests: a default TestModel() calls every
+tool with junk arguments, which breaks tools that validate input. See
+tests/test_safety_net.py for opting in to a tool call.
 """
 
 from pydantic_ai.models.test import TestModel
@@ -11,7 +15,7 @@ from agent.agents import AgentDeps, agent
 
 async def test_agent_runs_with_test_model():
     """Agent runs without error using TestModel (no API call)."""
-    with agent.override(model=TestModel()):
+    with agent.override(model=TestModel(call_tools=[])):
         result = await agent.run("Test input", deps=AgentDeps())
     # TestModel returns a placeholder output that satisfies the output_type schema
     assert result.output is not None
@@ -19,14 +23,14 @@ async def test_agent_runs_with_test_model():
 
 async def test_agent_accepts_string_input():
     """Agent accepts a string user prompt."""
-    with agent.override(model=TestModel()):
+    with agent.override(model=TestModel(call_tools=[])):
         result = await agent.run("Hello", deps=AgentDeps())
     assert result is not None
 
 
 async def test_agent_message_history():
     """Demonstrate multi-turn conversation history pattern."""
-    with agent.override(model=TestModel()):
+    with agent.override(model=TestModel(call_tools=[])):
         result1 = await agent.run("First message", deps=AgentDeps())
         history = result1.all_messages()  # all_messages(), not new_messages() — keeps all turns
 

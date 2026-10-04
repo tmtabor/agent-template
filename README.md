@@ -169,6 +169,8 @@ except ContentFilterError as e:
 
 Copy `agent/tools/example.py`, implement your tool, register with `@agent.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param), and `ToolFailed` for expected failures it can't fix but can work around (not found, unsupported) — log and re-raise everything else.
 
+Unit tests don't run your tools by default: the `TestModel` safety net in `tests/conftest.py` calls none (a default `TestModel` calls every tool with junk arguments, which breaks tools that validate input and really runs ones with side effects). Test tool logic by calling the function directly, as `tests/test_tools.py` does, and opt in to an end-to-end call (recipe in `tests/test_safety_net.py`) with `TestModel(call_tools=["your_tool"])`.
+
 ## Customizing the prompt
 
 Edit `agent/prompts/system.txt`. It's loaded via `load_prompt("system")` in `agent/prompts/templates.py`; add more `.txt` files in the same directory and load them the same way.

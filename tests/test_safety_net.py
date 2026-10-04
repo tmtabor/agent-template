@@ -1,0 +1,41 @@
+"""The unit-test safety net never runs tools unless a test opts in.
+
+tests/conftest.py overrides every agent's model with a TestModel. A plain
+TestModel() calls *every* tool with junk arguments, which fails for any tool
+that validates its input (ModelRetry on "a") and really executes tools with
+side effects. The safety net therefore uses call_tools=[]; a test that wants a
+tool executed opts in with its own TestModel(call_tools=[...]).
+"""
+
+from pydantic_ai import ModelRetry
+from pydantic_ai.models.test import TestModel
+
+from agent.agents import AgentDeps, agent
+
+
+async def test_tools_are_not_called_by_default():
+    calls: list[str] = []
+
+    def validating_tool_with_side_effect(query: str) -> str:
+        calls.append(query)
+        raise ModelRetry("digits only")
+
+    # No model override here: this runs on the autouse fixture's TestModel.
+    with agent.override(tools=[validating_tool_with_side_effect]):
+        result = await agent.run("hello", deps=AgentDeps())
+
+    assert result.output is not None
+    assert calls == []
+
+
+async def test_a_test_can_opt_in_to_calling_a_tool():
+    calls: list[str] = []
+
+    def lookup(query: str) -> str:
+        calls.append(query)
+        return "found"
+
+    with agent.override(tools=[lookup], model=TestModel(call_tools=["lookup"])):
+        await agent.run("hello", deps=AgentDeps())
+
+    assert len(calls) == 1

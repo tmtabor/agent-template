@@ -35,6 +35,13 @@ def override_all_agents_with_test_model():
     worker agents that tools delegate to — with TestModel. Tests can still
     apply their own override on top; the innermost override wins.
 
+    The TestModel uses call_tools=[]: a default TestModel() calls *every* tool
+    with junk arguments ("a"), which fails any tool that validates its input
+    (ModelRetry) and really executes tools that write, send or bill. Same rule
+    as for models: nothing runs for real unless a test asks. Test tool logic by
+    calling the tool function directly (tests/test_tools.py), and opt in to an
+    end-to-end tool call with TestModel(call_tools=["tool_name"]) in the test.
+
     The stub modules are pre-imported here so the override also covers
     modules a test imports lazily in its body (as tests/test_stubs.py does) —
     otherwise a module first imported mid-test would escape the net. Deleted
@@ -49,5 +56,5 @@ def override_all_agents_with_test_model():
             if name.startswith("agent.agents") and module is not None:
                 for value in vars(module).values():
                     if isinstance(value, Agent):
-                        stack.enter_context(value.override(model=TestModel()))
+                        stack.enter_context(value.override(model=TestModel(call_tools=[])))
         yield

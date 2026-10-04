@@ -7,6 +7,15 @@ have cloned the template: what changed, and whether you need to do anything.
 
 ## [Unreleased]
 
+### Changed
+- Unit tests no longer call agent tools by default. The `tests/conftest.py` safety net now
+  uses `TestModel(call_tools=[])`; a default `TestModel()` called every tool with junk
+  arguments, which failed any tool that validates input with `ModelRetry` and really ran
+  tools with side effects. Tests that want a tool executed opt in with
+  `TestModel(call_tools=["name"])` (see `SMOKE_TOOLS` in `tests/test_stubs.py` and the recipe
+  in `tests/test_safety_net.py`). If you wrote tests that relied on tools being called
+  automatically, add the opt-in.
+
 ### Fixed
 - Evals made with a real model failed with `RuntimeError: Event loop is closed` on every
   test after the first. Agents are module-level, so the provider's HTTP client was bound to
