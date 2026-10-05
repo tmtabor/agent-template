@@ -140,7 +140,7 @@ def test_blank_symbols_are_renamed(project: Path):
 def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
     project: Path, monkeypatch
 ):
-    """No shipped example needs a runtime dependency now, so one is declared for the test."""
+    """code_mode is the first shipped example with a runtime dependency, so this is the real case."""
     calls: list[tuple[list[str], Path]] = []
     real_run = subprocess.run
 
@@ -151,7 +151,8 @@ def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
         return real_run(command, *args, **kwargs)  # ruff formatting still runs for real
 
     monkeypatch.setattr(add_agent.subprocess, "run", record)
-    ex = dataclasses.replace(example("router"), dependencies=("httpx>=0.28", "rich"))
+    ex = example("code_mode")
+    assert ex.dependencies == ("pydantic-ai-harness[code-mode]>=0.54,<1",)
 
     add_agent.add(project, ex, "calendar", install=False)
     assert calls == []  # --no-install: nothing is installed

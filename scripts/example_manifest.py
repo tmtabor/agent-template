@@ -268,6 +268,7 @@ DISPLAY_ORDER = [
     "extraction",
     "rag",
     "mcp_tools",
+    "code_mode",
     "conversation",
     "human_in_the_loop",
     "guardrails",

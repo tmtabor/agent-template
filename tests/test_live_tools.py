@@ -106,6 +106,38 @@ async def test_a_flow_transcript_has_a_section_per_step():
         assert f"### {index}. `pipeline.{role}`" in text
 
 
+def test_code_the_model_wrote_is_shown_as_code_not_a_clipped_argument():
+    from pydantic_ai.messages import ToolCallPart
+
+    code = "total = 0\nfor i in range(3):\n    total += i\n\ntotal"
+    text = live_run.describe_call(ToolCallPart("run_code", {"code": code}))
+
+    assert text.startswith("ran this code in the sandbox:")
+    assert (
+        "    ```python\n    total = 0\n    for i in range(3):" in text
+    )  # indented under its bullet
+    assert text.rstrip().endswith("```") and "run_code(" not in text
+
+
+def test_very_long_code_is_clipped():
+    from pydantic_ai.messages import ToolCallPart
+
+    text = live_run.describe_call(ToolCallPart("run_code", {"code": "x = 1\n" * 1000}))
+    assert text.count("x = 1") < 1000  # clipped to MAX_CODE_CHARS before being indented
+    assert text.count("x = 1") <= live_run.MAX_CODE_CHARS // len("x = 1\n") + 1
+    assert " …" in text  # and says so
+
+
+def test_an_ordinary_tool_call_is_still_one_clipped_line():
+    from pydantic_ai.messages import ToolCallPart
+
+    text = live_run.describe_call(ToolCallPart("get_expense", {"expense_id": "X101"}))
+    assert text == 'called `get_expense({"expense_id": "X101"})`'
+    # A tool that merely takes a "code" argument is not the sandbox.
+    other = live_run.describe_call(ToolCallPart("apply_coupon", {"code": "SAVE10"}))
+    assert other.startswith("called `apply_coupon(")
+
+
 def test_a_run_that_paused_for_approval_is_described_readably_not_as_a_raw_repr():
     from pydantic_ai import DeferredToolRequests
     from pydantic_ai.messages import ToolCallPart

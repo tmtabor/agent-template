@@ -1,0 +1,17 @@
+title = "Code mode"
+pattern = "code_mode"
+summary = "Let the model write Python that calls your tools in a sandbox (Monty): many tool calls and exact arithmetic in one or two model requests, with hard limits on what the code can do."
+smoke_input = "What is the total of Maya's travel expenses, in US dollars?"
+# A real model must work through code (the sandbox's one tool) for this (checked by the release check).
+expected_tools = ["run_code"]
+# Code mode comes from pydantic-ai-harness, which tracks Pydantic AI's version (0.54 goes with 2.54).
+dependencies = ["pydantic-ai-harness[code-mode]>=0.54,<1"]
+
+# TestModel's generated answer cites a subject that is not a real id, which the output validator
+# rejects, so the smoke tests supply one that is.
+[smoke.code_mode_agent]
+output = { result = "Maya spent a total of 0 dollars.", amount_usd = 0.0, subject = "E2" }
+
+[entrypoint]
+deps = "ExpenseDeps"
+run = "run_expenses"

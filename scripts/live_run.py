@@ -31,6 +31,8 @@ from agent.runs import RunResult, Step
 from example_manifest import Example
 
 MAX_FIELD_CHARS = 500  # long prompts, tool arguments and results are clipped in transcripts
+CODE_TOOL = "run_code"  # code mode's one tool: its argument is code the model wrote
+MAX_CODE_CHARS = 1500
 OUTPUT_TOOL = "final_result"  # Pydantic AI's default name for the structured-output "tool"
 
 
@@ -174,6 +176,16 @@ def money(cost: Decimal | None) -> str:
     return f"${cost:.4f}" if cost is not None else "cost unknown"
 
 
+def describe_call(part: ToolCallPart) -> str:
+    """One bullet for a tool call. Code the model wrote is shown as code, since it is the point."""
+    args = part.args_as_dict()
+    if part.tool_name == CODE_TOOL and isinstance(args.get("code"), str):
+        code = clip(args["code"], MAX_CODE_CHARS)
+        indented = "\n".join(f"    {line}" if line else "" for line in code.splitlines())
+        return f"ran this code in the sandbox:\n\n    ```python\n{indented}\n    ```"
+    return f"called `{part.tool_name}({clip(as_text(part.args), 200)})`"
+
+
 def render_step(index: int, step: Step) -> str:
     output = step.result.output
     messages = step.result.all_messages()
@@ -200,7 +212,7 @@ def render_step(index: int, step: Step) -> str:
     for message in messages:
         for part in message.parts:
             if isinstance(part, ToolCallPart) and part.tool_name != OUTPUT_TOOL:
-                events.append(f"called `{part.tool_name}({clip(as_text(part.args), 200)})`")
+                events.append(describe_call(part))
             elif isinstance(part, ToolReturnPart) and part.tool_name != OUTPUT_TOOL:
                 events.append(f"`{part.tool_name}` returned: {clip(as_text(part.content), 200)}")
             elif isinstance(part, RetryPromptPart):

@@ -64,6 +64,13 @@ have cloned the template: what changed, and whether you need to do anything.
   `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
   need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
   `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
+- `code_mode`, an example of Pydantic AI's code mode (`pydantic-ai-harness`'s `CodeMode`, running the
+  model's Python in the Monty sandbox): the model writes code that calls the agent's tools in loops,
+  so a question that needs dozens of tool calls and exact arithmetic takes two or three model
+  requests. Its tests run real hostile code (files, environment, clock, network, subprocess,
+  infinite loops, memory, runaway tool loops) in the real sandbox and check that the host is untouched.
+  The first example with a runtime dependency: `add_agent.py` installs
+  `pydantic-ai-harness[code-mode]`. Transcripts now show code the model wrote as code.
 - `run_*` helpers may resume a run with no new prompt: `Flow.run` accepts `prompt=None` with
   `message_history=` and `deferred_tool_results=`.
 - The release gate runs a dependency-bearing example's generic tests (and its copy-into-a-project
