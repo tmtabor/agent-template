@@ -1,6 +1,6 @@
 # Example agent library — plan
 
-Status: step 1 (foundation) implemented; later steps pending. Date: 2026-10-05.
+Status: steps 1 and 2 implemented (step 2 not yet committed); steps 3-7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -181,7 +181,7 @@ Then, in priority order:
 | Guardrails | Input/output validation, content-filter handling, cost limits | none |
 | MCP tools | Consuming an MCP server's tools | MCP extra |
 
-Heavier examples, built in step 6 (they need extra dependencies or services and
+Heavier examples, built in step 7 (they need extra dependencies or services and
 exercise the isolated-environment and `services` machinery):
 
 | Pattern | Shows | Extra dependencies / services |
@@ -189,7 +189,7 @@ exercise the isolated-environment and `services` machinery):
 | Code execution (Monty) | The model writes Python that runs in a sandboxed interpreter, with only the tools and inputs the example exposes | `pydantic-monty` (confirm the package name and its Pydantic AI integration when building) |
 | Durable workflow (Temporal) | An agent run as a durable, resumable Temporal workflow: retries, crash recovery, long waits | Temporal SDK / Pydantic AI's Temporal integration; a Temporal server (`services = ["temporal"]`, started from the example's `docker-compose.yml`) |
 
-Still deferred beyond step 6: planner-executor and vector-DB-backed retrieval.
+Still deferred beyond step 7: planner-executor and vector-DB-backed retrieval.
 
 ## Trace labels
 
@@ -210,6 +210,85 @@ rewriting: labels are derived from the module name.
 - Test in `tests/test_add_agent.py`: after adding an example as `triage`, every
   `Agent` in the copied module has a `.name` equal to `triage` or starting with
   `triage.`. This also guards every new example.
+
+## Run results (step 3)
+
+**Problem.** Every `run_*` helper returns only the validated output and discards what
+Pydantic AI already computed: usage, messages, per-step detail. The orchestrating examples
+build a shared `RunUsage` and throw it away; the web-UI skill had to bypass `run_agent()`
+because the helper hides the result; the generic tests cannot see what a flow did; and
+`sample_run.md` transcripts, cost reporting and the Temporal example all need that
+information. Recording `Agent.run` calls in the tests was considered and rejected: it works
+around the contract instead of fixing it.
+
+**Decision (option A): one uniform result type for every example.** `run_*` always returns
+the same small dataclass, defined once in `agent/runs.py`:
+
+```python
+@dataclass
+class Step:
+    agent: str                  # the agent's label (see "Trace labels")
+    result: AgentRunResult      # the native Pydantic AI result, untouched
+
+@dataclass
+class RunResult(Generic[OutputT]):
+    output: OutputT             # the run's own output; for flows, built in code from the steps
+    steps: list[Step]           # every agent run, in order (a list: labels repeat)
+    def usage(self) -> RunUsage          # total across steps (they share one RunUsage)
+    def all_messages(self) -> list[ModelMessage]
+```
+
+- A single agent is a one-step run; callers always write `(await run_x(...)).output`, and
+  anyone who wants the native object takes `.steps[0].result`. Moving from `single` to
+  `router` never changes a call site.
+- The type exists because in `router`, `pipeline` and `fan_out` the output is synthesized in
+  code from several steps and is no single step's output. Everything else is derivable.
+- A small optional `Flow` helper in the same module owns the shared `RunUsage` and limits and
+  records each step (`await flow.run(agent, prompt, deps=deps)`, then `flow.finish(output)`),
+  replacing the `usage=..., usage_limits=...` boilerplate repeated across the examples. It is
+  a convenience for building results, not part of the contract.
+
+**Manifest.** Smoke configuration becomes per agent, keyed by the agent's variable name, and
+replaces `smoke_tools`, `smoke_output` and `[entrypoint] agent` (which only ever meant "the
+agent the tests happen to drive"). `[entrypoint]` keeps `deps` and `run`.
+
+```toml
+[smoke.supervisor_agent]
+call_tools = ["delegate_to_worker_a"]
+
+[smoke.extraction_agent]
+output = { name = "Ada Lovelace", email = "ada@example.com" }
+```
+
+Agents without an entry get the default: a `TestModel` that calls no tools.
+
+**Tests.**
+- The generic smoke test calls `run(smoke_input)` with each agent's smoke model applied, so
+  the whole flow runs offline for every example. It asserts on the `RunResult`: at least one
+  step, every step's label carries the example's name, the opted-in tools were called
+  somewhere across the steps, and `usage().requests` is within the example's `USAGE_LIMITS`.
+- The content-filter test checks every agent in the module directly, not one per example.
+- The generated `tests/test_agents_<name>.py` does the same through the copied agent's `run`.
+- The cost-limit tests use `run` where they can; the enforcement test seeds usage and stays on
+  `agent.run`.
+
+**What changes.** `agent/runs.py` (+ tests); all nine examples' `run_*` helpers and their
+`test_example.py`; `example_manifest.py`; `tests/examples_support.py`; the generic tests;
+`add_agent.py`'s generated smoke test and eval starter; `evals/helpers.py` (reads `.output`);
+README, `AGENTS.md`, the web-UI skill and the changelog.
+
+**Breaking change.** `run_agent()` and the other helpers change return type relative to 0.2.0.
+The unreleased changelog already carries breaking changes, and there are no production users
+of the example library yet, which is why it is done now. Add an Upgrade note.
+
+**Open items to settle while building it.**
+- Whether `run_*` should accept `message_history=`, so the web-UI skill can use the helper
+  instead of bypassing it.
+- Whether the supervisor's workers should appear as their own steps (the delegation tool
+  would record them through deps) or stay inside the supervisor's single step; usage is
+  total either way.
+- Temporal (step 7) may need a serializable form of the result, since runs happen in a worker
+  process. Plan: add a `to_record()` view later; the contract above should not need to change.
 
 ## Docs site
 
@@ -233,14 +312,20 @@ rewriting: labels are derived from the module name.
 2. **Trace labels, then first new examples.** First add `agent_label(__name__)`
    (see "Trace labels") and switch the existing examples to it; then write
    extraction, router, pipeline, fan-out and evaluator–optimizer, each using it,
-   with a README and `sample_run.md`.
-3. **Live verification.** `release_check.py`, `record_example.py`, the isolated
-   per-example runs and the release CI job.
-4. **Docs site.** MkDocs Material config, gen-files generation, Pages workflow,
+   with a README (the `sample_run.md` files wait for step 4's recorder).
+3. **Uniform run results.** Replace "`run_*` returns only the output" with the `RunResult`
+   contract described under "Run results": `agent/runs.py`, every example's run helper, the
+   per-agent `[smoke]` manifest tables, the generic and generated tests, evals, docs and the
+   changelog. Done when the generic smoke test drives each example's whole flow through
+   `run` and asserts on the returned steps.
+4. **Live verification.** `release_check.py`, `record_example.py` (which builds
+   `sample_run.md` from a `RunResult`), the isolated per-example runs and the release CI
+   job. Commit the `sample_run.md` files here.
+5. **Docs site.** MkDocs Material config, gen-files generation, Pages workflow,
    README links.
-5. **Remaining roadmap examples:** RAG/retrieval, human-in-the-loop, conversational
+6. **Remaining roadmap examples:** RAG/retrieval, human-in-the-loop, conversational
    with memory, guardrails and MCP tools — the ones that need no services.
-6. **Monty and Temporal examples.** The first examples with real extra dependencies:
+7. **Monty and Temporal examples.** The first examples with real extra dependencies:
    - **Monty (code execution):** `dependencies` in `example.toml`; tests skip in the
      root environment and run in the example's isolated one. Decide how the sandbox's
      limits (time, memory, allowed calls) are shown and tested, and that it never runs
@@ -251,7 +336,7 @@ rewriting: labels are derived from the module name.
      alongside the agent. Offline tests use Temporal's in-process test environment if
      it exists, otherwise they are limited to import and wiring checks.
    This step is also what proves the `dependencies`/`services` machinery from
-   step 3 on real cases; expect small fixes to the manifest schema and release check.
+   step 4 on real cases; expect small fixes to the manifest schema and release check.
 
 ## Risks and open items
 
@@ -260,7 +345,7 @@ rewriting: labels are derived from the module name.
 - `--prune` is destructive; it must show what it will delete and require
   confirmation or `--yes`.
 - Monty and Temporal are the least certain examples: their package names, versions
-  and Pydantic AI integration points must be checked against current docs when step 6
+  and Pydantic AI integration points must be checked against current docs when step 7
   starts, and the plan may change then.
 - Each example's live smoke run costs money. Budgets are enforced per example,
   and the release check should report total spend.
@@ -272,6 +357,26 @@ rewriting: labels are derived from the module name.
 - Copying an example under a new name must rewrite its prompt paths correctly;
   the temp-repo test of `add_agent.py` guards this.
 
+## Implementation notes (step 2, as built)
+
+- **Trace labels:** `agent_label(__name__)` in `agent/logging.py`, used by every example;
+  tested in place (`tests/test_examples.py`) and in a copied agent
+  (`tests/test_add_agent.py`).
+- **New examples:** `extraction`, `router`, `pipeline`, `fan_out`, `evaluator_optimizer`,
+  each with README, manifest and a `test_example.py` using `FunctionModel` to test the
+  orchestration. `sample_run.md` files are deferred to step 4 (they need `record_example.py`
+  and a live key).
+- **`smoke_output`:** new optional manifest table. `TestModel`'s generated junk fails a real
+  output validator, so `extraction` supplies the output smoke tests should return; the
+  generic tests (`tests/examples_support.py:smoke_model`) and the generated smoke test use it.
+- **Safety net:** also scans dicts/lists/tuples at module level; examples keep every Agent
+  reachable from module scope (router's specialists are variables as well as dict values).
+- **`examples/conftest.py`** sets dummy provider keys so `pytest examples/<name>` works alone.
+- **Manifest `agent`:** the generic tests drive it directly; for orchestrated examples it is
+  the first agent (classifier, outline step, worker, generator), and the orchestration is
+  tested by the example's own tests. **Superseded by step 3**, which has the generic tests
+  run the whole flow through `run` and removes this key.
+
 ## Implementation notes (step 1, as built)
 
 - **Manifest loader:** `scripts/example_manifest.py` (standard library only), shared
@@ -279,7 +384,7 @@ rewriting: labels are derived from the module name.
   stays after `--prune`.
 - **Schema as built:** `title`, `pattern`, `summary`, `smoke_input`, `[entrypoint]`
   required; `smoke_tools`, `dependencies`, `env`, `services`, `templated` optional.
-  `expected_tools` and `cost_budget_usd` are deferred to the live tier (step 3).
+  `expected_tools` and `cost_budget_usd` are deferred to the live tier (step 4).
 - **Prompts:** `PROMPTS_DIRS` in `agent/prompts/templates.py`; `examples/__init__.py`
   registers each example's `prompts/` so examples run in place. On copy, prompt
   files are renamed `<example>*.txt` → `<name>*.txt` and matching `load_prompt(...)`
