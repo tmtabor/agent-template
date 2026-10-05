@@ -1,6 +1,7 @@
 # Example agent library — plan
 
-Status: steps 1-6 implemented (step 5 awaits the one-time Pages setting); step 7 pending. Date: 2026-10-05.
+Status: steps 1-6 implemented, including the services machinery (step 5 awaits the one-time Pages
+setting); step 7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -394,12 +395,12 @@ asserting behavior and that every agent ran, a recorded run, and 100% line cover
   output validator rejects personal data even though the prompt never mentions it (live runs showed
   it firing: the model drafted an email, was sent back, and rewrote); `ContentFilterError` and
   `UsageLimitExceeded` become blocked answers, and any other exception still propagates.
-- **`mcp_tools`:** the MCP server is defined *inside* `agent.py` and used in process
-  (`MCP(local=server)`), so the example is one copyable file with no subprocess; swapping in a URL
-  or stdio transport is one argument (shown in the README). Pydantic AI 2.54's MCP integration uses
-  `fastmcp`, not the `mcp` SDK, and its client does not install the server half, so the example
-  declares `dependencies = ["fastmcp-slim[server]>=4.0,<5"]`. Live: exact date arithmetic from the
-  server's tools (a leap-year February: 20 days, not the naive 19).
+- **`mcp_tools`:** first built with the MCP server inside `agent.py`, used in process
+  (`MCP(local=server)`). That undersold MCP, whose point is the process boundary, and left its
+  "swap in a URL" claim as untested documentation, so it was rebuilt as a real service (see
+  "Services" below). Pydantic AI 2.54's MCP integration uses `fastmcp`, not the `mcp` SDK, and its
+  client does not install the server half. Live: exact date arithmetic from the service's tools (a
+  leap-year February: 20 days, not the naive 19).
 - **First dependency-bearing example: the isolated-environment path is now proven for real.** That
   surfaced gaps no fake runner could: (1) the generic tests skip it in the default environment, so
   the gate's isolated stage now also runs the generic tests and the copy-into-a-project test
@@ -419,6 +420,48 @@ asserting behavior and that every agent ran, a recorded run, and 100% line cover
 - **Verified:** the complete gate over all 14 examples (hermetic offline suite, each example's live
   tests and smoke run, mcp_tools in its own environment, 100% coverage of 768 statements, every
   transcript present and current) for under a cent of model spend.
+
+## Services machinery (built with step 6, before Temporal needs it)
+
+Decision: prove the `services` half of the machinery on something small first, so Temporal (step 7)
+inherits a tested lifecycle instead of building and debugging one. `mcp_tools` is that example.
+
+- **Declaration:** `services = ["mcp-server"]` plus a `[service.mcp-server]` table (container `port`,
+  the `env` variable that receives the address, a `url` template with `{address}`), and
+  `service/docker-compose.yml`. The manifest validates that each listed service has a table and
+  vice versa, that the compose file exists, and the port/env/url shapes.
+- **Lifecycle (`scripts/services.py`):** `docker compose -p <unique> up -d --build --wait` (the
+  compose healthcheck is what `--wait` waits on), then `docker compose port <service> <port>` to
+  learn the host port Docker chose (compose publishes `"127.0.0.1::8000"`: loopback only, free
+  port), then `down -v --remove-orphans` in a `finally`, even if starting failed halfway. Everything
+  goes through an injectable runner, so every branch is tested without a daemon. A real run left
+  zero containers and zero networks behind.
+- **Two honest outcomes besides pass/fail:** Docker unusable (daemon down, not installed, no
+  Compose) is *unverified* with Docker's own reason, spending nothing and failing the check unless
+  `--allow-unverified`; a service that won't start is *failed* with the container logs. Verified for
+  real by pointing `DOCKER_HOST` at a socket that doesn't exist.
+- **The environment carries the address:** every stage for that example (isolated offline tests,
+  live tests, the smoke run) gets the variable, so the agent reads `McpDeps.server_url` from
+  `MCP_SERVER_URL`. `record_example.py` run on its own treats an example with services as
+  unverified unless that variable is already set.
+- **Testing without Docker until the last layer:** the server's functions directly; the server run
+  as a local subprocess on a free port for the offline tests; the real container only in the gate.
+  `test_dependencies` (the server half of fastmcp) is layered on for tests but is not installed into
+  a user's project, because using the agent needs nothing beyond the template.
+- **Generic tests** that run an agent skip an example whose service variable is unset
+  (`import_example(example, running=True)`), so the default suite never needs Docker.
+- **`add_agent.py`** copies `service/` to `services/<name>/` (the server is a separate deployable,
+  not part of `agent/`), prints how to start it, and generates a smoke test and eval starter that
+  skip unless the service variable is set.
+- **Coverage** includes `examples/*/service/server.py`: the server's code is example code too.
+- **Bugs this found** (all in code that had no real service to exercise it): the transcript check
+  excluded every example with services, leaving an empty selection (so the gate "passed" its own
+  check by running no tests); `uv add` was never tested; and the isolation rule keyed only on
+  `dependencies`, so an example needing only test packages or a service would have run without its
+  generic tests.
+- **For step 7:** Temporal reuses all of this. It needs a `service/docker-compose.yml` that
+  publishes 7233 (the image `temporalio/temporal` is already on this machine), a `[service.temporal]`
+  table with `env = "TEMPORAL_ADDRESS"`, and a healthcheck.
 
 ## Implementation notes (step 5, as built)
 
