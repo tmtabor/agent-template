@@ -1,7 +1,6 @@
 # Example agent library — plan
 
-Status: steps 1-4 implemented; step 5 (docs site) built, awaiting the one-time Pages setting;
-steps 6-7 pending. Date: 2026-10-05.
+Status: steps 1-6 implemented (step 5 awaits the one-time Pages setting); step 7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -330,9 +329,10 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
    manually and locally (no CI job). Commit the `sample_run.md` files here.
 5. **Docs site.** MkDocs Material config, gen-files generation, Pages workflow,
    README links.
-6. **Remaining roadmap examples:** RAG/retrieval, human-in-the-loop, conversational
-   with memory, guardrails and MCP tools — the ones that need no services.
-7. **Monty and Temporal examples.** The first examples with real extra dependencies:
+6. **Remaining roadmap examples** (done): RAG/retrieval, human-in-the-loop, conversation with
+   memory and streaming, guardrails, and MCP tools. See "Implementation notes (step 6)".
+7. **Monty and Temporal examples.** `mcp_tools` already proved the `dependencies` machinery (step 6);
+   these two add the next hard cases:
    - **Monty (code execution):** `dependencies` in `example.toml`; tests skip in the
      root environment and run in the example's isolated one. Decide how the sandbox's
      limits (time, memory, allowed calls) are shown and tested, and that it never runs
@@ -342,8 +342,8 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
      "unverified (no Docker)" result when it can't, and a README on running a worker
      alongside the agent. Offline tests use Temporal's in-process test environment if
      it exists, otherwise they are limited to import and wiring checks.
-   This step is also what proves the `dependencies`/`services` machinery from
-   step 4 on real cases; expect small fixes to the manifest schema and release check.
+   Temporal is the first example with `services`, so it proves that half of the machinery;
+   expect small fixes to the manifest schema and release check.
 
 ## Risks and open items
 
@@ -363,6 +363,62 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
   documented workflow; covered by the changelog entry.
 - Copying an example under a new name must rewrite its prompt paths correctly;
   the temp-repo test of `add_agent.py` guards this.
+
+## Implementation notes (step 6, as built)
+
+Five examples, each held to step 4's standard: offline tests of every branch, real-model live tests
+asserting behavior and that every agent ran, a recorded run, and 100% line coverage.
+
+- **`rag`:** an in-memory knowledge base of *invented* store policies (a model can't answer from
+  memory, so a correct answer proves retrieval), keyword retrieval, and an output validator that
+  rejects any cited source the model didn't actually retrieve (`RagDeps.retrieved`). Live: grounded
+  answers with real citations, a two-part question drawing on two passages, and "I couldn't find
+  that" with empty sources for something uncovered.
+- **`human_in_the_loop`:** a refund tool with three outcomes: small refunds run, larger ones raise
+  `ApprovalRequired` (the run pauses and returns `DeferredToolRequests`; `run_refunds` asks a
+  pluggable approver and resumes the same conversation), and impossible ones are rejected by
+  `args_validator` *before* anyone is asked. `deps.refunds` is the ground truth, and an output
+  validator rejects a claim the ledger contradicts. Live tests check the ledger, not the model's
+  words. They found the model saying "I have submitted the request" after a denial (nothing was
+  submitted); the prompt now forbids it and a live test guards it.
+- **`conversation`:** message history across turns, a turn-based window (`ProcessHistory` with a
+  `RunContext`-aware processor reading `max_turns` from deps, cutting only at turn boundaries so a
+  tool call stays with its result), and streaming. `stream_text` merges chunks arriving within 100 ms
+  by default (`debounce_by`), which made streaming timing-dependent; it is set to `None`. Live:
+  remembers across turns, genuinely forgets a turn outside the window, streams real chunks. This
+  resolves step 3's open item: `run_chat(..., history=)` takes history, and `Flow.run` accepts
+  `prompt=None` plus `message_history=` / `deferred_tool_results=` for resumed runs.
+- **`guardrails`:** a free regex check with a Luhn checksum refuses card and SSN numbers *before any
+  model is called* (spans confirm no agent ran and zero requests were spent); a small guard agent
+  refuses off-topic and instruction-extraction requests (the main agent provably never runs); an
+  output validator rejects personal data even though the prompt never mentions it (live runs showed
+  it firing: the model drafted an email, was sent back, and rewrote); `ContentFilterError` and
+  `UsageLimitExceeded` become blocked answers, and any other exception still propagates.
+- **`mcp_tools`:** the MCP server is defined *inside* `agent.py` and used in process
+  (`MCP(local=server)`), so the example is one copyable file with no subprocess; swapping in a URL
+  or stdio transport is one argument (shown in the README). Pydantic AI 2.54's MCP integration uses
+  `fastmcp`, not the `mcp` SDK, and its client does not install the server half, so the example
+  declares `dependencies = ["fastmcp-slim[server]>=4.0,<5"]`. Live: exact date arithmetic from the
+  server's tools (a leap-year February: 20 days, not the naive 19).
+- **First dependency-bearing example: the isolated-environment path is now proven for real.** That
+  surfaced gaps no fake runner could: (1) the generic tests skip it in the default environment, so
+  the gate's isolated stage now also runs the generic tests and the copy-into-a-project test
+  (`GENERIC_TESTS`, narrowed with `-k`); (2) `fastmcp` raises a plain `ImportError`, not
+  `ModuleNotFoundError`, when its server half is missing, so the skip logic (`import_example`, the
+  conftest pre-import) catches `ImportError` for examples that declare dependencies, and the test
+  files probe for the server half specifically; (3) `add_agent.py`'s `uv add` step had never been
+  tested and now is.
+- **Two chicken-and-egg bugs in the gate**, both found by recording a brand-new example: the offline
+  suite required every example to have a transcript before the gate could record one, and the docs
+  build failed on a link to a not-yet-recorded run. Transcript existence is now checked in its own
+  stage *after* the live stage, and the docs generator drops the "See it run" line for an example
+  with no recording yet.
+- **Transcript quality:** a run that paused is rendered as "The run paused: waiting for a decision
+  on approve issue_refund({...})", not a raw repr full of provider noise; the human-in-the-loop smoke
+  input is the large refund so its recorded run shows the pause and the resume.
+- **Verified:** the complete gate over all 14 examples (hermetic offline suite, each example's live
+  tests and smoke run, mcp_tools in its own environment, 100% coverage of 768 statements, every
+  transcript present and current) for under a cent of model spend.
 
 ## Implementation notes (step 5, as built)
 
