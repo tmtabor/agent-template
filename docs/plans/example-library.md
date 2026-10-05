@@ -1,7 +1,7 @@
 # Example agent library — plan
 
-Status: steps 1-6 and 7a (Monty) implemented, including the services machinery (step 5 awaits the
-one-time Pages setting); 7b (Temporal) pending. Date: 2026-10-05.
+Status: steps 1-7 implemented (7a Monty, 7b Temporal), including the services machinery (step 5
+awaits the one-time Pages setting). Nothing is pending in the example roadmap. Date: 2026-10-05.
 
 ## Goals
 
@@ -294,8 +294,8 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
   of multi-turn flows will say what a history parameter should mean for multi-step runs.
 - The supervisor's workers stay **inside** the supervisor's single step (usage is total either
   way), which keeps the example teaching the standard `usage=ctx.usage` delegation pattern.
-- Temporal (step 7) may need a serializable form of the result, since runs happen in a worker
-  process. Plan: add a `to_record()` view later; the contract above should not need to change.
+- Temporal (step 7b) did **not** need a serializable form of the result: a workflow annotated
+  `-> AgentRunResult[Output]` hands the client a real `AgentRunResult`, so `RunResult` is unchanged.
 
 ## Docs site
 
@@ -332,7 +332,7 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
    README links.
 6. **Remaining roadmap examples** (done): RAG/retrieval, human-in-the-loop, conversation with
    memory and streaming, guardrails, and MCP tools. See "Implementation notes (step 6)".
-7. **Monty and Temporal examples.** `mcp_tools` already proved the `dependencies` machinery (step 6);
+7. **Monty and Temporal examples** (done: 7a `code_mode`, 7b `temporal`). `mcp_tools` already proved the `dependencies` machinery (step 6);
    these two add the next hard cases:
    - **Monty (code execution):** `dependencies` in `example.toml`; tests skip in the
      root environment and run in the example's isolated one. Decide how the sandbox's
@@ -462,6 +462,49 @@ inherits a tested lifecycle instead of building and debugging one. `mcp_tools` i
 - **For step 7:** Temporal reuses all of this. It needs a `service/docker-compose.yml` that
   publishes 7233 (the image `temporalio/temporal` is already on this machine), a `[service.temporal]`
   table with `env = "TEMPORAL_ADDRESS"`, and a healthcheck.
+
+## Implementation notes (step 7b, Temporal, as built)
+
+- **What it is.** `Agent(..., capabilities=[TemporalDurability(...)])`, a workflow class derived from
+  `PydanticAIWorkflow` that lists the agent in `__pydantic_ai_agents__`, and `PydanticAIPlugin` on the
+  client. (`TemporalAgent` is deprecated.) The extra is only `temporalio>=1.34,<2`, which is the
+  example's `dependencies` pin. The server is `temporalio/temporal:1.8.0` (the CLI's own tag, which is
+  the same image as `latest` today; pinned so the gate runs against one server), started with
+  `server start-dev --headless` and healthy in under two seconds.
+- **Domain:** an order desk with `check_stock` and a `shipping_quote` whose carrier API is down the first
+  time it is asked about each shipment, so the retry is visible. `RETRY_POLICY` is 5 attempts with
+  backoff; every activity has a 30 s timeout.
+- **Offline tests need the server.** `WorkflowEnvironment.start_local()` downloads a binary, so a
+  hermetic suite cannot use it (this corrects the plan's earlier guess). The tests skip without
+  `TEMPORAL_ADDRESS` and the gate supplies it; coverage still reaches 100% through the gate. They run
+  against the real server with `TestModel` as the model and assert on the **server's event history**.
+- **What the tests prove:** a failing tool is retried and the model never sees it; the model-request
+  activity runs once per request; the history of a retried tool shows only its final attempt (so the
+  failures are kept in the carrier's own ledger); the retry policy is exhausted at 5 attempts and then
+  fails the run, without asking the model again; a non-retryable `ApplicationError` is tried once; a run
+  that cannot finish raises `RunTimedOut`; a worker shut down mid-tool-call is replaced and the model is
+  asked exactly twice in total; and a worker run as a **separate process and `SIGKILL`ed** mid-call is
+  replaced, which takes about the 30 s activity timeout because nothing is reported to the server.
+- **Live:** against Gemini and the real server: the quote matches the independently computed 20.30, the
+  carrier really failed first, the model saw no retry prompt, the server recorded attempt 2 for the
+  carrier call and one start per model request, and the demo script runs.
+- **Surprises worth keeping:**
+  - The sandbox re-executes the workflow's module, so the template's modules (which read `.env`) must be
+    imported inside `workflow.unsafe.imports_passed_through()`.
+  - A workflow cannot live in `__main__`, and the agent's name (so its activity names) differed between
+    the worker and the sandbox in script mode. The demo block re-imports the module under its real name.
+  - A bug in workflow code does not fail the run: Temporal retries the workflow task forever and the
+    caller hangs (a mistyped `r.usage()` did exactly this). Every run needs an `execution_timeout`.
+  - Two workflows that list one agent register its activities twice and the worker refuses to start.
+  - Pydantic AI's `invoke_agent` span does not appear for a run in a workflow (`LogfirePlugin` adds
+    Temporal's own `StartWorkflow` / `RunActivity` spans), so the span-based "every agent ran" check cannot
+    see it; the live test reads the agent's activity names from the server's history instead.
+  - A copied agent (`add_agent.py temporal --name orders`) was run in a scratch copy of the repo: its
+    generated smoke test passes against its own `services/orders` server and skips without one.
+- **Generic changes:** `tests/test_services.py` now accepts a compose file that names a pinned published
+  image where it used to demand a `Dockerfile`. `AGENTS.md` records the rules above.
+- **Not done, on purpose:** the transcript of a run shows the model's view, in which the carrier never
+  failed; the retry is shown by the tests and the README, not by `sample_run.md`.
 
 ## Implementation notes (step 7a, Monty, as built)
 
