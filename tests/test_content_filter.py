@@ -11,6 +11,7 @@ from pydantic_ai.exceptions import ContentFilterError
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models.function import FunctionModel
 
+from tests.agent_finder import module_agents
 from tests.examples_support import example_ids, import_example
 
 
@@ -23,15 +24,18 @@ def _filtered(messages, info) -> ModelResponse:
 
 
 @pytest.mark.parametrize("example", example_ids())
-async def test_example_raises_on_content_filtered_response(example):
+async def test_every_agent_in_an_example_raises_on_content_filtered_response(example):
+    """Each agent is checked directly — not just the one a flow happens to reach first."""
     module = import_example(example)
-    main_agent = getattr(module, example.agent)
     deps = getattr(module, example.deps)()
-    with (
-        main_agent.override(model=FunctionModel(_filtered)),
-        pytest.raises(ContentFilterError, match="content_filter"),
-    ):
-        await main_agent.run("Smoke test input", deps=deps)
+    agents = module_agents(module)
+    assert agents
+    for agent in agents:
+        with (
+            agent.override(model=FunctionModel(_filtered)),
+            pytest.raises(ContentFilterError, match="content_filter"),
+        ):
+            await agent.run("Smoke test input", deps=deps)
 
 
 async def test_default_agent_returns_partial_text_without_the_capability():

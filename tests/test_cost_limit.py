@@ -15,7 +15,8 @@ from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.usage import RunUsage
 
 from agent.config import Settings, settings
-from tests.examples_support import example_ids, import_example, smoke_model
+from tests.agent_finder import module_agents
+from tests.examples_support import example_ids, import_example, smoke_overrides
 
 
 def test_cost_limit_is_off_by_default():
@@ -39,25 +40,24 @@ async def test_no_cost_warning_when_no_cost_limit_is_set(example):
     if settings.cost_limit is not None:
         pytest.skip("AGENT_COST_LIMIT is set in this environment")
 
-    main_agent = getattr(module, example.agent)
-    deps = getattr(module, example.deps)()
-    with main_agent.override(model=smoke_model(example)), warnings.catch_warnings():
+    run = getattr(module, example.run)
+    with smoke_overrides(example, module), warnings.catch_warnings():
         warnings.simplefilter("error", CostNotFoundWarning)
-        await main_agent.run("Smoke test input", deps=deps, usage_limits=module.USAGE_LIMITS)
+        await run(example.smoke_input)
 
 
 @pytest.mark.parametrize("example", example_ids())
 async def test_cost_limit_is_enforced_when_set(example):
     module = import_example(example)
     limits = dataclasses.replace(module.USAGE_LIMITS, cost_limit=Decimal("0.50"))
-
-    # TestModel can't be priced, so seed a usage already over the cap.
-    main_agent = getattr(module, example.agent)
     deps = getattr(module, example.deps)()
-    with pytest.raises(UsageLimitExceeded, match="cost_limit"):
-        await main_agent.run(
-            "Smoke test input",
-            deps=deps,
-            usage=RunUsage(cost=Decimal("1")),
-            usage_limits=limits,
-        )
+
+    # TestModel can't be priced, so seed a usage already over the cap. Checked on every agent.
+    for agent in module_agents(module):
+        with pytest.raises(UsageLimitExceeded, match="cost_limit"):
+            await agent.run(
+                "Smoke test input",
+                deps=deps,
+                usage=RunUsage(cost=Decimal("1")),
+                usage_limits=limits,
+            )

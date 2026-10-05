@@ -19,11 +19,12 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import RaiseContentFilterError
-from pydantic_ai.usage import RunUsage, UsageLimits
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
 from agent.prompts.templates import load_prompt
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -83,38 +84,41 @@ class EvaluatorOptimizerOutput(BaseModel):
 
 async def run_evaluator_optimizer(
     user_input: str, deps: EvaluatorOptimizerDeps | None = None
-) -> EvaluatorOptimizerOutput:
+) -> RunResult[EvaluatorOptimizerOutput]:
     """Draft a description of `user_input`, revising until the critic accepts or the cap is hit.
 
     Hitting the cap returns the last draft with `accepted=False` rather than raising; the
-    caller decides whether that is good enough.
+    caller decides whether that is good enough. `.steps` on the result holds every generate and
+    critique round, in order.
     """
     if deps is None:
         deps = EvaluatorOptimizerDeps()
-    usage = RunUsage()  # shared, so USAGE_LIMITS bounds every round
-    run_args = {"deps": deps, "usage": usage, "usage_limits": USAGE_LIMITS}
+    flow = Flow(USAGE_LIMITS)  # one shared budget, so USAGE_LIMITS bounds every round
 
     prompt = f"Item: {user_input}"
     draft = ""
     for iteration in range(1, MAX_ITERATIONS + 1):
-        draft = (await generator_agent.run(prompt, **run_args)).output.result
-        critique = (
-            await critic_agent.run(f"Item: {user_input}\n\nDescription:\n{draft}", **run_args)
-        ).output
+        draft = (await flow.run(generator_agent, prompt, deps=deps)).output.result
+        review = f"Item: {user_input}\n\nDescription:\n{draft}"
+        critique = (await flow.run(critic_agent, review, deps=deps)).output
         logger.info("Reviewed", extra={"iteration": iteration, "accepted": critique.accepted})
         if critique.accepted:
-            return EvaluatorOptimizerOutput(result=draft, accepted=True, iterations=iteration)
+            return flow.finish(
+                EvaluatorOptimizerOutput(result=draft, accepted=True, iterations=iteration)
+            )
         # Feed the critic's feedback back in, along with the draft it was about.
         prompt = (
             f"Item: {user_input}\n\nPrevious attempt:\n{draft}\n\nFeedback to address:\n"
             f"{critique.feedback}"
         )
 
-    return EvaluatorOptimizerOutput(result=draft, accepted=False, iterations=MAX_ITERATIONS)
+    return flow.finish(
+        EvaluatorOptimizerOutput(result=draft, accepted=False, iterations=MAX_ITERATIONS)
+    )
 
 
 if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    print(asyncio.run(run_evaluator_optimizer("A stainless steel water bottle")))
+    print(asyncio.run(run_evaluator_optimizer("A stainless steel water bottle")).output)

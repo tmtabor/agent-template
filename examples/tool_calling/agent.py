@@ -24,6 +24,7 @@ from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -116,23 +117,30 @@ async def example_tool(ctx: RunContext[ToolAgentDeps], query: str) -> str:
         raise
 
 
-async def run_tool_agent(user_input: str, deps: ToolAgentDeps | None = None) -> ToolAgentOutput:
+async def run_tool_agent(
+    user_input: str, deps: ToolAgentDeps | None = None
+) -> RunResult[ToolAgentOutput]:
     """Run the tool-calling agent.
 
     Args:
         user_input: The user's message or task description.
         deps: Runtime dependencies. Created with defaults if not provided.
+
+    Returns:
+        A RunResult: `.output` is the validated ToolAgentOutput; the tool calls the agent made
+        are in `.all_messages()`.
     """
     if deps is None:
         deps = ToolAgentDeps()
     logger.info("Running tool-calling agent", extra={"user_input": user_input})
-    result = await tool_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
-    return result.output
+    flow = Flow(USAGE_LIMITS)
+    result = await flow.run(tool_agent, user_input, deps=deps)
+    return flow.finish(result.output)
 
 
 if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    output = asyncio.run(run_tool_agent("What can you find out about Python 3.13?"))
-    print(output)
+    result = asyncio.run(run_tool_agent("What can you find out about Python 3.13?"))
+    print(result.output)

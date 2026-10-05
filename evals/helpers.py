@@ -23,6 +23,8 @@ from pydantic_evals.evaluators import (
     TrajectoryMatch,
 )
 
+from agent.runs import RunResult
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 # Behavioral budgets, applied to every case. These are span-based evaluators:
@@ -79,9 +81,9 @@ def case_evaluators(fixture: dict) -> list[Evaluator]:
 
 
 async def run_fixture_dataset(
-    name: str, fixtures: list[dict], run: Callable[[str], Awaitable[Any]]
+    name: str, fixtures: list[dict], run: Callable[[str], Awaitable[RunResult]]
 ) -> None:
-    """Run every fixture case through `run` and assert they all pass.
+    """Run every fixture case through `run` (a run helper) and assert they all pass.
 
     Add cases to the JSON file to grow the eval — no code changes needed unless a case
     requires a new kind of check, in which case add an Evaluator like ContainsExpected.
@@ -106,7 +108,7 @@ async def run_fixture_dataset(
     )
 
     async def task(user_input: str) -> str:
-        return output_text(await run(user_input))
+        return output_text((await run(user_input)).output)
 
     report = await dataset.evaluate(task)
     report.print(include_input=True, include_output=True)

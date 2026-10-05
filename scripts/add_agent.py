@@ -103,31 +103,39 @@ def rename(text: str, example: Example, name: str) -> str:
 
 
 def smoke_test_source(example: Example, name: str) -> str:
-    agent, deps = (rename(s, example, name) for s in (example.agent, example.deps))
-    tools = list(example.smoke_tools)
-    # Without opt-ins the autouse safety net in tests/conftest.py already supplies a
-    # TestModel that calls no tools. Build our own only to opt in to tools or to supply
-    # an output the agent's validators accept (TestModel's generated junk would fail them).
-    own_model = bool(tools) or example.smoke_output is not None
+    run = rename(example.run, example, name)
+    # Agents the manifest configures for smoke tests, by their (renamed) variable names.
+    configured = {rename(var, example, name): cfg for var, cfg in example.smoke.items()}
+    tools = sorted({t for cfg in configured.values() for t in cfg.call_tools})
+
     imports = ""
     if tools:
         imports += "from pydantic_ai.messages import ToolReturnPart\n"
-    if own_model:
+    if configured:
         imports += "from pydantic_ai.models.test import TestModel\n"
     if imports:
         imports += "\n"
+    names = ", ".join(sorted([*configured, run]))
 
-    if own_model:
-        kwargs = f"call_tools={tools!r}"
-        if example.smoke_output is not None:
-            kwargs += f", custom_output_args={example.smoke_output!r}"
-        body = (
-            f"    with {agent}.override(model=TestModel({kwargs})):\n"
-            f'        result = await {agent}.run("Smoke test input", deps={deps}())\n'
-        )
+    # The autouse safety net in tests/conftest.py already gives every agent a TestModel that
+    # calls no tools. Override only the agents the manifest configures: to opt in to tools, or
+    # to supply an output their validators accept (TestModel's generated junk would fail them).
+    overrides = []
+    for variable, cfg in configured.items():
+        kwargs = f"call_tools={list(cfg.call_tools)!r}"
+        if cfg.output is not None:
+            kwargs += f", custom_output_args={cfg.output!r}"
+        overrides.append(f"{variable}.override(model=TestModel({kwargs}))")
+    call = f'result = await {run}("Smoke test input")'
+    if len(overrides) == 1:
+        body = f"    with {overrides[0]}:\n        {call}\n"
+    elif overrides:
+        inner = "".join(f"        {o},\n" for o in overrides)
+        body = f"    with (\n{inner}    ):\n        {call}\n"
     else:
-        body = f'    result = await {agent}.run("Smoke test input", deps={deps}())\n'
-    check = "    assert result.output is not None\n"
+        body = f"    {call}\n"
+
+    check = "    assert result.output is not None\n    assert result.steps\n"
     if tools:
         check += (
             "    called = {\n"
@@ -141,11 +149,11 @@ def smoke_test_source(example: Example, name: str) -> str:
     return (
         f'"""Smoke test for the {name} agent '
         f"(scaffolded by scripts/add_agent.py from the {example.name} example).\n\n"
-        "The autouse fixture in tests/conftest.py overrides every Agent under agent.agents\n"
-        "with a TestModel, so this runs with no API key and no cost.\n"
-        '"""\n\n'
+        "Runs the whole flow through the agent's run helper. The autouse fixture in\n"
+        "tests/conftest.py overrides every Agent under agent.agents with a TestModel, so this\n"
+        'runs with no API key and no cost.\n"""\n\n'
         f"{imports}"
-        f"from agent.agents.{name} import {agent}, {deps}\n\n\n"
+        f"from agent.agents.{name} import {names}\n\n\n"
         f"async def test_{name}_runs_with_test_model():\n"
         f"{body}{check}"
     )
@@ -165,18 +173,18 @@ def eval_source(example: Example, name: str) -> str:
         f"SMOKE_INPUT = {example.smoke_input!r}\n\n\n"
         "@pytest.mark.eval\n"
         f"async def test_{name}_returns_output():\n"
-        f"    output = await {run}(SMOKE_INPUT)\n"
-        "    assert output_text(output)\n\n\n"
+        f"    result = await {run}(SMOKE_INPUT)\n"
+        "    assert output_text(result.output)\n\n\n"
         "@pytest.mark.eval\n"
         f"async def test_{name}_fixture_dataset():\n"
         f'    await run_fixture_dataset("{name}", load_fixtures("{name}"), {run})\n\n\n'
         "@pytest.mark.eval\n"
         f"async def test_{name}_quality_judge():\n"
         '    """An LLM judge (AGENT_JUDGE_MODEL) scores the answer against your criteria."""\n'
-        f"    output = await {run}(SMOKE_INPUT)\n"
+        f"    result = await {run}(SMOKE_INPUT)\n"
         "    verdict = await judge_response(\n"
         "        task=SMOKE_INPUT,\n"
-        "        response=output_text(output),\n"
+        "        response=output_text(result.output),\n"
         '        criteria="The response directly and accurately addresses the task.",\n'
         "        threshold=0.6,\n"
         "    )\n"
@@ -349,9 +357,10 @@ def main(argv: list[str] | None = None) -> int:
     for path in written:
         print(f"Created {path.relative_to(REPO_ROOT)}")
 
-    agent = rename(example.agent, example, name)
+    run = rename(example.run, example, name)
     print(f"\nDone — the {name} agent is in agent/agents/{name}.py. Import it directly:")
-    print(f"    from agent.agents.{name} import {agent}\n")
+    print(f"    from agent.agents.{name} import {run}")
+    print(f"    result = await {run}(...)   # result.output is the answer\n")
     if example.dependencies and args.no_install:
         print(f"Install its dependencies: uv add {' '.join(example.dependencies)}")
     if example.env:

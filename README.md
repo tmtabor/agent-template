@@ -115,11 +115,21 @@ For each agent, `add_agent.py`:
 - runs `uv add` for any extra dependencies the example declares, and tells you about any
   environment variables or services it needs.
 
-There is no shared "primary" agent. Import each agent directly from its own module:
+There is no shared "primary" agent. Import each agent directly from its own module. Every
+`run_*` helper returns the same thing, a `RunResult` (`agent/runs.py`):
 
 ```python
-from agent.agents.triage import SharedDeps, run_supervisor
+from agent.agents.triage import run_supervisor
+
+result = await run_supervisor("Summarize the benefits of unit tests")
+result.output  # the validated output
+result.usage  # total usage, across every agent run in the flow
+result.steps  # each agent run, in order: Step(agent="triage", result=<AgentRunResult>)
 ```
+
+A single agent is a one-step run, a router or pipeline a several-step run, so moving an agent
+from one shape to the other never changes a call site. `result.steps[0].result` is the native
+Pydantic AI result if you want its messages or run id.
 
 Once you've picked what you need, `uv run python scripts/add_agent.py --prune` removes the
 other examples (keeping `blank`), the docs and their tests. Nothing under `agent/` or `evals/`
@@ -144,7 +154,7 @@ response the provider filters (safety block or refusal) raises
 from pydantic_ai.exceptions import ContentFilterError
 
 try:
-    output = await run_supervisor(user_input)  # whichever run_* your agent has
+    result = await run_supervisor(user_input)  # whichever run_* your agent has
 except ContentFilterError as e:
     ...  # e.message has the reason; e.body has the filtered response
 ```

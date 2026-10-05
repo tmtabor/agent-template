@@ -1,6 +1,6 @@
 # Example agent library — plan
 
-Status: steps 1 and 2 implemented (step 2 not yet committed); steps 3-7 pending. Date: 2026-10-05.
+Status: steps 1-3 implemented (step 3 not yet committed); steps 4-7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -59,11 +59,16 @@ dependencies = []                 # PEP 508 requirements beyond the template's o
 env = []                          # extra environment variables required
 services = []                    # e.g. ["temporal"]; needs docker-compose.yml
 
-[entrypoint]                      # where tests and the release check find the agent
-agent = "supervisor_agent"
+[entrypoint]                      # where tests and the release check find the example's API
 deps = "SharedDeps"
-run = "run_supervisor"
+run = "run_supervisor"            # async (user_input) -> RunResult, see "Run results"
+
+[smoke.supervisor_agent]          # per-agent TestModel config for offline smoke tests
+call_tools = ["delegate_to_worker_a"]   # (`output = {...}` is also accepted)
 ```
+
+(`expected_tools` and `cost_budget_usd` belong to the live tier, step 4. The key set built so far
+is listed under "Implementation notes".)
 
 `[entrypoint]` replaces the alias mapping that `choose_pattern.py` hard-coded.
 Nothing is renamed or re-exported: an added agent keeps the example's own
@@ -222,7 +227,8 @@ information. Recording `Agent.run` calls in the tests was considered and rejecte
 around the contract instead of fixing it.
 
 **Decision (option A): one uniform result type for every example.** `run_*` always returns
-the same small dataclass, defined once in `agent/runs.py`:
+the same small dataclass, defined once in `agent/runs.py` (`usage` is a property on Pydantic AI's
+native result in 2.54, so it is a field here too):
 
 ```python
 @dataclass
@@ -234,7 +240,7 @@ class Step:
 class RunResult(Generic[OutputT]):
     output: OutputT             # the run's own output; for flows, built in code from the steps
     steps: list[Step]           # every agent run, in order (a list: labels repeat)
-    def usage(self) -> RunUsage          # total across steps (they share one RunUsage)
+    usage: RunUsage             # total across steps; stored, not summed (steps share one object)
     def all_messages(self) -> list[ModelMessage]
 ```
 
@@ -248,7 +254,7 @@ class RunResult(Generic[OutputT]):
   replacing the `usage=..., usage_limits=...` boilerplate repeated across the examples. It is
   a convenience for building results, not part of the contract.
 
-**Manifest.** Smoke configuration becomes per agent, keyed by the agent's variable name, and
+**Manifest.** Smoke configuration becomes per agent (a `call_tools` list and an `output` table), keyed by the agent's variable name, and
 replaces `smoke_tools`, `smoke_output` and `[entrypoint] agent` (which only ever meant "the
 agent the tests happen to drive"). `[entrypoint]` keeps `deps` and `run`.
 
@@ -281,12 +287,12 @@ README, `AGENTS.md`, the web-UI skill and the changelog.
 The unreleased changelog already carries breaking changes, and there are no production users
 of the example library yet, which is why it is done now. Add an Upgrade note.
 
-**Open items to settle while building it.**
-- Whether `run_*` should accept `message_history=`, so the web-UI skill can use the helper
-  instead of bypassing it.
-- Whether the supervisor's workers should appear as their own steps (the delegation tool
-  would record them through deps) or stay inside the supervisor's single step; usage is
-  total either way.
+**Open items, as settled.**
+- `run_*` does **not** take `message_history=` yet. The web-UI skill keeps calling `agent.run()`
+  directly; revisit when the conversational-memory example is built (step 6), where the design
+  of multi-turn flows will say what a history parameter should mean for multi-step runs.
+- The supervisor's workers stay **inside** the supervisor's single step (usage is total either
+  way), which keeps the example teaching the standard `usage=ctx.usage` delegation pattern.
 - Temporal (step 7) may need a serializable form of the result, since runs happen in a worker
   process. Plan: add a `to_record()` view later; the contract above should not need to change.
 
@@ -357,6 +363,28 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
 - Copying an example under a new name must rewrite its prompt paths correctly;
   the temp-repo test of `add_agent.py` guards this.
 
+## Implementation notes (step 3, as built)
+
+- **`agent/runs.py`:** `Step`, `RunResult` and `Flow`, with tests in `tests/test_runs.py`.
+  `RunResult.usage` is a stored field, because steps sharing a `RunUsage` all return the same
+  object and summing would double-count. `Flow.run` passes the shared usage and limits to every
+  step and records it on completion (so parallel steps appear in completion order); a step that
+  raises records nothing.
+- **All nine examples** return `RunResult[...]` from their `run_*` helper; the four flows use
+  `Flow` in place of hand-passed `usage=` / `usage_limits=`. Their own tests also assert on
+  `.steps` and `.usage`.
+- **Manifest:** `[smoke.<agent_variable>]` tables (`call_tools`, `output`) replace `smoke_tools`,
+  `smoke_output` and `[entrypoint] agent`; `[entrypoint]` is now just `deps` and `run`.
+- **Generic tests:** the smoke test drives `run` with the manifest's per-agent overrides and
+  asserts on the `RunResult` (steps labeled for the example, usage within `USAGE_LIMITS`,
+  opted-in tools called). The content-filter and cost-enforcement tests check every agent in
+  the module directly. `tests/agent_finder.py` is the shared "find the agents a module holds"
+  helper (used by the safety net too).
+- **`add_agent.py`:** the generated smoke test calls the copied agent's `run` and applies only
+  the configured agents' overrides; the eval starter reads `result.output`;
+  `evals/helpers.py:run_fixture_dataset` takes a run helper that returns a `RunResult`.
+- **Docs:** README, AGENTS.md and the changelog describe the contract, with an Upgrade note.
+
 ## Implementation notes (step 2, as built)
 
 - **Trace labels:** `agent_label(__name__)` in `agent/logging.py`, used by every example;
@@ -374,8 +402,8 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
 - **`examples/conftest.py`** sets dummy provider keys so `pytest examples/<name>` works alone.
 - **Manifest `agent`:** the generic tests drive it directly; for orchestrated examples it is
   the first agent (classifier, outline step, worker, generator), and the orchestration is
-  tested by the example's own tests. **Superseded by step 3**, which has the generic tests
-  run the whole flow through `run` and removes this key.
+  tested by the example's own tests. **Superseded by step 3**, which removed this key; the
+  generic tests now run the whole flow through `run`.
 
 ## Implementation notes (step 1, as built)
 

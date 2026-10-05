@@ -27,6 +27,7 @@ from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -119,23 +120,30 @@ async def delegate_to_worker_a(ctx: RunContext[SharedDeps], task: str) -> str:
 # Add more delegation tools for other workers
 
 
-async def run_supervisor(user_input: str, deps: SharedDeps | None = None) -> SupervisorOutput:
+async def run_supervisor(
+    user_input: str, deps: SharedDeps | None = None
+) -> RunResult[SupervisorOutput]:
     """Run the supervisor agent to coordinate workers on a task.
 
     Args:
         user_input: The user's message or task description.
         deps: Runtime dependencies. Created with defaults if not provided.
+
+    Returns:
+        A RunResult with one step, the supervisor's. The workers it delegated to ran inside
+        that step (their calls are in `.all_messages()`), and `.usage` includes their spend.
     """
     if deps is None:
         deps = SharedDeps()
     logger.info("Running supervisor agent", extra={"user_input": user_input})
-    result = await supervisor_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
-    return result.output
+    flow = Flow(USAGE_LIMITS)
+    result = await flow.run(supervisor_agent, user_input, deps=deps)
+    return flow.finish(result.output)
 
 
 if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    output = asyncio.run(run_supervisor("Complete this complex task..."))
-    print(output)
+    result = asyncio.run(run_supervisor("Complete this complex task..."))
+    print(result.output)

@@ -11,8 +11,8 @@ fields out, and bad output should be caught and corrected rather than passed dow
   gets to fix its own answer
 - An explicit retry budget (`retries={"output": 2}`); when it runs out the run raises
   `UnexpectedModelBehavior` instead of returning something half-valid
-- `smoke_output` in `example.toml`: `TestModel` generates junk that a real validator rejects,
-  so the offline tests are told what to return
+- `[smoke.extraction_agent]` in `example.toml`: `TestModel` generates junk that a real validator
+  rejects, so the offline tests are told what to return
 
 ```bash
 uv run python scripts/add_agent.py extraction --name contacts

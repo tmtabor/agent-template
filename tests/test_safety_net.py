@@ -46,7 +46,7 @@ def test_agents_held_in_containers_are_found():
     """The net finds an Agent that a module only holds inside a dict, list or tuple."""
     from pydantic_ai import Agent
 
-    from tests.conftest import _agents_in
+    from tests.agent_finder import agents_in as _agents_in
 
     held = Agent(TestModel())
     assert _agents_in(held) == [held]

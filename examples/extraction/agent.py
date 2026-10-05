@@ -24,6 +24,7 @@ from pydantic_ai.usage import UsageLimits
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
 from agent.prompts.templates import load_prompt
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -82,8 +83,8 @@ def check_contact(ctx: RunContext[ExtractionDeps], contact: Contact) -> Contact:
     return contact
 
 
-async def run_extraction(user_input: str, deps: ExtractionDeps | None = None) -> Contact:
-    """Extract a contact from `user_input`.
+async def run_extraction(user_input: str, deps: ExtractionDeps | None = None) -> RunResult[Contact]:
+    """Extract a contact from `user_input`. `.output` on the result is the `Contact`.
 
     Raises:
         UnexpectedModelBehavior: When the model can't produce a valid contact within
@@ -92,8 +93,9 @@ async def run_extraction(user_input: str, deps: ExtractionDeps | None = None) ->
     if deps is None:
         deps = ExtractionDeps()
     logger.info("Running extraction agent", extra={"user_input": user_input})
-    result = await extraction_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
-    return result.output
+    flow = Flow(USAGE_LIMITS)
+    result = await flow.run(extraction_agent, user_input, deps=deps)
+    return flow.finish(result.output)
 
 
 if __name__ == "__main__":
@@ -101,4 +103,4 @@ if __name__ == "__main__":
 
     configure_logging()
     text = "Hi, it's Ada Lovelace from Analytical Engines Ltd. Reach me at ada@example.com."
-    print(asyncio.run(run_extraction(text)))
+    print(asyncio.run(run_extraction(text)).output)

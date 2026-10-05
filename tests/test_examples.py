@@ -1,18 +1,25 @@
-"""Every example is well-formed and runs under TestModel.
+"""Every example is well-formed and runs its whole flow under TestModel.
 
-Parametrized over the manifests discovered in examples/, so adding an example adds
-its checks. Each one is imported in place; an example whose declared dependencies
-aren't installed in this environment is skipped, not failed.
+Parametrized over the manifests discovered in examples/, so adding an example adds its
+checks. Each one is imported in place; an example whose declared dependencies aren't
+installed in this environment is skipped, not failed.
 """
 
 from pathlib import Path
 
 import pytest
-from pydantic_ai import Agent
 from pydantic_ai.messages import ToolReturnPart
 
+from agent.runs import RunResult
 from example_manifest import EXAMPLES_DIR, ManifestError, load
-from tests.examples_support import EXAMPLES, example_ids, import_example, smoke_model
+from tests.agent_finder import module_agents
+from tests.examples_support import (
+    EXAMPLES,
+    example_ids,
+    import_example,
+    is_labeled,
+    smoke_overrides,
+)
 
 
 def test_examples_exist():
@@ -40,22 +47,38 @@ def test_prompt_files_are_named_after_the_example(example):
 
 
 @pytest.mark.parametrize("example", example_ids())
-def test_entrypoint_names_resolve(example):
+def test_entrypoint_and_smoke_names_resolve(example):
     module = import_example(example)
-    for attr in (example.agent, example.deps, example.run):
+    for attr in (example.deps, example.run):
         assert hasattr(module, attr), f"{example.module} has no {attr}"
+    agent_ids = {id(a) for a in module_agents(module)}
+    agent_variables = {name for name, value in vars(module).items() if id(value) in agent_ids}
+    for variable in example.smoke:
+        assert variable in agent_variables, (
+            f"[smoke.{variable}] is not an Agent in {example.module}"
+        )
 
 
 @pytest.mark.parametrize("example", example_ids())
-async def test_example_runs_with_test_model(example):
+async def test_example_runs_its_whole_flow_with_test_model(example):
+    """Drive `run` end to end: every agent in the flow runs, and the RunResult says how."""
     module = import_example(example)
-    main_agent = getattr(module, example.agent)
-    deps = getattr(module, example.deps)()
+    run = getattr(module, example.run)
 
-    # The safety net calls no tools; opt in to the ones the manifest names.
-    with main_agent.override(model=smoke_model(example)):
-        result = await main_agent.run(example.smoke_input, deps=deps)
+    with smoke_overrides(example, module):
+        result = await run(example.smoke_input)
+
+    assert isinstance(result, RunResult)
     assert result.output is not None
+    assert result.steps, "a run records at least one step"
+    for step in result.steps:
+        assert is_labeled(step.agent, example.name), (
+            f"{step.agent!r} is not labeled for the example"
+        )
+        assert step.result.output is not None
+
+    # One shared budget: the total covers every step and stays inside the example's limits.
+    assert len(result.steps) <= result.usage.requests <= module.USAGE_LIMITS.request_limit
 
     # Opted-in tools must really have been called, or the opt-in is silently dead.
     called = {
@@ -64,7 +87,17 @@ async def test_example_runs_with_test_model(example):
         for part in message.parts
         if isinstance(part, ToolReturnPart)
     }
-    assert set(example.smoke_tools) <= called
+    for config in example.smoke.values():
+        assert set(config.call_tools) <= called
+
+
+@pytest.mark.parametrize("example", example_ids())
+def test_agents_are_labeled_with_the_example_name(example):
+    """Labels follow the module name, so a copy is labeled with its chosen name."""
+    agents = module_agents(import_example(example))
+    assert agents, f"{example.module} defines no Agent"
+    for found in agents:
+        assert is_labeled(found.name, example.name), found.name
 
 
 @pytest.mark.parametrize(
@@ -81,14 +114,30 @@ def test_invalid_manifests_are_rejected(tmp_path: Path, toml: str, message: str)
         load(tmp_path)
 
 
-def agents_in(module) -> list[Agent]:
-    return [v for v in vars(module).values() if isinstance(v, Agent)]
+VALID = """
+title = "x"
+pattern = "x"
+summary = "x"
+smoke_input = "x"
+[entrypoint]
+deps = "D"
+run = "r"
+"""
 
 
-@pytest.mark.parametrize("example", example_ids())
-def test_agents_are_labeled_with_the_example_name(example):
-    """Labels follow the module name, so a copy is labeled with its chosen name."""
-    agents = agents_in(import_example(example))
-    assert agents, f"{example.module} defines no Agent"
-    for found in agents:
-        assert found.name == example.name or (found.name or "").startswith(f"{example.name}.")
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        ("[smoke.some_agent]\nbogus = 1\n", "unknown key"),
+        ("[smoke.some_agent]\ncall_tools = 3\n", "list of non-empty strings"),
+        ("[smoke.some_agent]\noutput = 3\n", "must be a table"),
+        ("[smoke]\nsome_agent = 3\n", "must be a table named for an agent"),
+        ("[entrypoint]\nagent = 'a'\n", "exactly"),
+    ],
+)
+def test_invalid_smoke_tables_are_rejected(tmp_path: Path, extra: str, message: str):
+    (tmp_path / "agent.py").write_text("")
+    body = VALID if "[entrypoint]" not in extra else VALID.split("[entrypoint]")[0]
+    (tmp_path / "example.toml").write_text(body + extra)
+    with pytest.raises(ManifestError, match=message):
+        load(tmp_path)

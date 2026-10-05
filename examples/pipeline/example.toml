@@ -4,6 +4,5 @@ summary = "Fixed sequential steps in code, each agent's typed output feeding the
 smoke_input = "Why unit tests are worth writing"
 
 [entrypoint]
-agent = "outline_agent"
 deps = "PipelineDeps"
 run = "run_pipeline"

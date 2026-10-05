@@ -24,5 +24,8 @@ dispatch. There is no agentic loop to bound and the routing logic is ordinary Py
 uv run python scripts/add_agent.py router --name support
 ```
 
-Adapt it by changing `Category` and `SPECIALISTS`. The smoke tests drive `router_agent` (the
-classifier); `examples/router/test_example.py` tests the dispatch itself.
+`run_router` returns a `RunResult`: `.output` is the answer and its category, and `.steps` records
+the route taken (the classifier, then that category's specialist).
+
+Adapt it by changing `Category` and `SPECIALISTS`. `examples/router/test_example.py` tests the
+dispatch and the shared budget.

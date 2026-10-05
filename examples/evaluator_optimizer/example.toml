@@ -4,6 +4,5 @@ summary = "A generator drafts and a critic reviews against criteria; they loop u
 smoke_input = "A stainless steel water bottle"
 
 [entrypoint]
-agent = "generator_agent"
 deps = "EvaluatorOptimizerDeps"
 run = "run_evaluator_optimizer"

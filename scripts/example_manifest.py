@@ -10,35 +10,40 @@ Schema — every key but `title`, `pattern`, `summary`, `smoke_input` and
     pattern = "supervisor"            # category for the index and docs
     summary = "One-line description."
     smoke_input = "Input used by smoke tests and the generated eval starter."
-    smoke_tools = ["tool_name"]       # tools the offline smoke test opts in to calling
-
-    [smoke_output]                    # only if the agent's output validators reject the
-    field = "value"                   # junk TestModel generates: the output TestModel returns
     dependencies = ["httpx>=0.28"]    # PEP 508 requirements beyond the template's own
     env = ["SOME_API_KEY"]            # extra environment variables the example needs
     services = ["temporal"]           # external services it needs running
     templated = false                 # true: the example's name is a placeholder to rename
 
     [entrypoint]
-    agent = "supervisor_agent"        # module-level Agent
     deps = "SharedDeps"               # deps dataclass (constructible with no arguments)
-    run = "run_supervisor"            # async (user_input) -> output helper
+    run = "run_supervisor"            # async (user_input) -> RunResult helper
+
+    # How smoke tests configure each agent's TestModel, keyed by the agent's variable name.
+    # Agents with no entry get the default: a TestModel that calls no tools.
+    [smoke.supervisor_agent]
+    call_tools = ["delegate_to_worker_a"]   # tools to opt in to calling (and then expect called)
+
+    [smoke.extraction_agent]
+    output = { name = "Ada", email = "ada@example.com" }   # the output TestModel returns, for
+                                                           # agents whose validators reject its junk
 """
 
 from __future__ import annotations
 
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 REQUIRED = {"title", "pattern", "summary", "smoke_input", "entrypoint"}
-OPTIONAL_LISTS = ("smoke_tools", "dependencies", "env", "services")
-KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke_output"}
-ENTRYPOINT_KEYS = {"agent", "deps", "run"}
+OPTIONAL_LISTS = ("dependencies", "env", "services")
+KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke"}
+ENTRYPOINT_KEYS = {"deps", "run"}
+SMOKE_KEYS = {"call_tools", "output"}
 
 # A loose PEP 508 check: a distribution name, optional extras, optional specifier
 # or marker. Enough to catch typos without depending on `packaging`.
@@ -50,6 +55,14 @@ class ManifestError(ValueError):
 
 
 @dataclass(frozen=True)
+class AgentSmoke:
+    """How smoke tests configure one agent's TestModel."""
+
+    call_tools: tuple[str, ...] = ()
+    output: dict | None = None
+
+
+@dataclass(frozen=True)
 class Example:
     name: str
     path: Path
@@ -57,15 +70,13 @@ class Example:
     pattern: str
     summary: str
     smoke_input: str
-    agent: str
     deps: str
     run: str
-    smoke_tools: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
     env: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
     templated: bool = False
-    smoke_output: dict | None = None
+    smoke: dict[str, AgentSmoke] = field(default_factory=dict)
 
     @property
     def module(self) -> str:
@@ -86,6 +97,28 @@ def _string_list(data: dict, key: str, where: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
         raise ManifestError(f"{where}: `{key}` must be a list of non-empty strings")
     return tuple(value)
+
+
+def _smoke(table: object, where: str) -> dict[str, AgentSmoke]:
+    if not isinstance(table, dict):
+        raise ManifestError(f"{where}: `smoke` must be a table of [smoke.<agent_variable>] tables")
+    result: dict[str, AgentSmoke] = {}
+    for agent_name, config in table.items():
+        if not agent_name.isidentifier() or not isinstance(config, dict):
+            raise ManifestError(f"{where}: [smoke.{agent_name}] must be a table named for an agent")
+        unknown = config.keys() - SMOKE_KEYS
+        if unknown:
+            raise ManifestError(
+                f"{where}: [smoke.{agent_name}] has unknown key(s) {sorted(unknown)}"
+            )
+        output = config.get("output")
+        if output is not None and not isinstance(output, dict):
+            raise ManifestError(f"{where}: [smoke.{agent_name}] `output` must be a table")
+        result[agent_name] = AgentSmoke(
+            call_tools=_string_list(config, "call_tools", f"{where} [smoke.{agent_name}]"),
+            output=output,
+        )
+    return result
 
 
 def load(path: Path) -> Example:
@@ -118,9 +151,7 @@ def load(path: Path) -> Example:
         if not isinstance(value, str) or not value.isidentifier():
             raise ManifestError(f"{where}: entrypoint `{key}` must be a Python identifier")
 
-    smoke_output = data.get("smoke_output")
-    if smoke_output is not None and not isinstance(smoke_output, dict):
-        raise ManifestError(f"{where}: `smoke_output` must be a table")
+    smoke = _smoke(data.get("smoke", {}), where)
 
     dependencies = _string_list(data, "dependencies", where)
     for requirement in dependencies:
@@ -137,15 +168,13 @@ def load(path: Path) -> Example:
         pattern=data["pattern"],
         summary=data["summary"],
         smoke_input=data["smoke_input"],
-        agent=entry["agent"],
         deps=entry["deps"],
         run=entry["run"],
-        smoke_tools=_string_list(data, "smoke_tools", where),
         dependencies=dependencies,
         env=_string_list(data, "env", where),
         services=_string_list(data, "services", where),
         templated=data.get("templated", False),
-        smoke_output=smoke_output,
+        smoke=smoke,
     )
 
 

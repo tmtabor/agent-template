@@ -24,5 +24,8 @@ generator → draft → critic ─ accepted ─→ done
 uv run python scripts/add_agent.py evaluator_optimizer --name descriptions
 ```
 
-Adapt it by rewriting the critic's criteria, which are the whole point. The smoke tests drive
-`generator_agent`; `examples/evaluator_optimizer/test_example.py` tests the loop.
+`run_evaluator_optimizer` returns a `RunResult`: `.output` carries `accepted` and `iterations`,
+and `.steps` holds every generate and critique round in order.
+
+Adapt it by rewriting the critic's criteria, which are the whole point.
+`examples/evaluator_optimizer/test_example.py` tests the loop, the feedback and the cap.

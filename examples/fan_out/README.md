@@ -23,5 +23,8 @@ topic ─┬→ worker (benefits)  ─┐
 uv run python scripts/add_agent.py fan_out --name analysis
 ```
 
-Adapt it by changing `PERSPECTIVES` or replacing them with your own subtasks. The smoke tests
-drive `worker_agent`; `examples/fan_out/test_example.py` tests the fan-out and the failure cases.
+`run_fan_out` returns a `RunResult`: `.output` is the summary and which perspectives were used or
+failed, and `.steps` holds the workers that succeeded (in completion order) and then the aggregator.
+
+Adapt it by changing `PERSPECTIVES` or replacing them with your own subtasks.
+`examples/fan_out/test_example.py` tests the parallelism and the failure cases.

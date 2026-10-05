@@ -20,15 +20,16 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import RaiseContentFilterError
-from pydantic_ai.usage import RunUsage, UsageLimits
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
 
-# Parallel runs all draw on one shared RunUsage, so this bounds the whole fan-out. Size
+# Parallel runs all draw on one Flow's shared usage, so this bounds the whole fan-out. Size
 # request_limit for (workers + aggregator), with headroom for retries.
 USAGE_LIMITS = UsageLimits(
     request_limit=20, total_tokens_limit=200_000, cost_limit=settings.cost_limit
@@ -85,29 +86,28 @@ class AllWorkersFailedError(Exception):
     """Every parallel worker failed, so there is nothing to aggregate."""
 
 
-async def run_fan_out(user_input: str, deps: FanOutDeps | None = None) -> FanOutOutput:
+async def run_fan_out(user_input: str, deps: FanOutDeps | None = None) -> RunResult[FanOutOutput]:
     """Analyze `user_input` from several perspectives in parallel, then summarize.
 
     One failing worker is tolerated — the summary is built from the rest and the failure is
     reported in `perspectives_failed`. If every worker fails there is nothing to summarize.
+
+    Returns:
+        A RunResult: `.output` is the FanOutOutput; `.steps` holds the workers that succeeded
+        (in completion order) and then the aggregator.
 
     Raises:
         AllWorkersFailedError: When no worker produced a finding.
     """
     if deps is None:
         deps = FanOutDeps()
-    usage = RunUsage()  # shared across the parallel runs, so USAGE_LIMITS bounds all of them
+    flow = Flow(USAGE_LIMITS)  # shared across the parallel runs, so it bounds all of them
 
     # return_exceptions=True keeps one failure from cancelling its siblings and discarding
     # work already paid for.
     outcomes = await asyncio.gather(
         *(
-            worker_agent.run(
-                f"Perspective: {perspective}\nTopic: {user_input}",
-                deps=deps,
-                usage=usage,
-                usage_limits=USAGE_LIMITS,
-            )
+            flow.run(worker_agent, f"Perspective: {perspective}\nTopic: {user_input}", deps=deps)
             for perspective in PERSPECTIVES
         ),
         return_exceptions=True,
@@ -131,19 +131,16 @@ async def run_fan_out(user_input: str, deps: FanOutDeps | None = None) -> FanOut
         raise AllWorkersFailedError(f"All {len(PERSPECTIVES)} workers failed for: {user_input!r}")
 
     material = "\n\n".join(f"{name}:\n{text}" for name, text in findings.items())
-    summary = await aggregator_agent.run(
-        f"Topic: {user_input}\n\n{material}",
-        deps=deps,
-        usage=usage,
-        usage_limits=USAGE_LIMITS,
-    )
-    return FanOutOutput(
-        result=summary.output.result,
-        perspectives_used=list(findings),
-        perspectives_failed=failed,
+    summary = await flow.run(aggregator_agent, f"Topic: {user_input}\n\n{material}", deps=deps)
+    return flow.finish(
+        FanOutOutput(
+            result=summary.output.result,
+            perspectives_used=list(findings),
+            perspectives_failed=failed,
+        )
     )
 
 
 if __name__ == "__main__":
     configure_logging()
-    print(asyncio.run(run_fan_out("Adopting a monorepo")))
+    print(asyncio.run(run_fan_out("Adopting a monorepo")).output)

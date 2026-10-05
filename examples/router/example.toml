@@ -4,6 +4,5 @@ summary = "A classifier picks a category and plain code dispatches to a speciali
 smoke_input = "I was charged twice for my subscription this month."
 
 [entrypoint]
-agent = "router_agent"
 deps = "RouterDeps"
 run = "run_router"

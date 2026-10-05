@@ -4,7 +4,7 @@ To use:
     1. Define your output type (or use str for unstructured output)
     2. Set your instructions in agent/prompts/blank.txt
     3. Add tools if needed
-    4. Call run_blank_agent()
+    4. Call run_blank_agent() and read `.output` from the RunResult it returns
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from pydantic_ai.usage import UsageLimits
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
 from agent.prompts.templates import load_prompt
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -84,7 +85,7 @@ blank_agent: Agent[BlankDeps, BlankOutput] = Agent(
 #     return f"Today is {date.today()}."
 
 
-async def run_blank_agent(user_input: str, deps: BlankDeps | None = None) -> BlankOutput:
+async def run_blank_agent(user_input: str, deps: BlankDeps | None = None) -> RunResult[BlankOutput]:
     """Run the blank agent with the given user input.
 
     Args:
@@ -92,22 +93,24 @@ async def run_blank_agent(user_input: str, deps: BlankDeps | None = None) -> Bla
         deps: Runtime dependencies. Created with defaults if not provided.
 
     Returns:
-        Validated BlankOutput instance.
+        A RunResult: `.output` is the validated BlankOutput, `.usage` the total usage, and
+        `.steps[0].result` the native Pydantic AI result (messages, run id, ...).
     """
     if deps is None:
         deps = BlankDeps()
 
     logger.info("Running blank agent", extra={"user_input": user_input})
 
-    result = await blank_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
+    flow = Flow(USAGE_LIMITS)
+    result = await flow.run(blank_agent, user_input, deps=deps)
 
     logger.info("Blank agent run complete", extra={"output": result.output})
-    return result.output
+    return flow.finish(result.output)
 
 
 if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    output = asyncio.run(run_blank_agent("Hello, what can you do?"))
-    print(output)
+    result = asyncio.run(run_blank_agent("Hello, what can you do?"))
+    print(result.output)

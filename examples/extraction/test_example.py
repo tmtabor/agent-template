@@ -23,7 +23,8 @@ def answers(*contacts: dict):
 async def test_a_valid_contact_is_returned_as_is():
     model, seen = answers({"name": "Ada", "email": "ada@example.com"})
     with extraction_agent.override(model=model):
-        contact = await run_extraction("Ada, ada@example.com")
+        result = await run_extraction("Ada, ada@example.com")
+        contact = result.output
     assert contact.email == "ada@example.com"
     assert len(seen) == 1
 
@@ -34,10 +35,14 @@ async def test_a_bad_email_is_sent_back_for_correction():
         {"name": "Ada", "email": "ada@example.com"},
     )
     with extraction_agent.override(model=model):
-        contact = await run_extraction("Ada, ada@example.com")
+        result = await run_extraction("Ada, ada@example.com")
+        contact = result.output
 
     assert contact.email == "ada@example.com"
     assert len(seen) == 2
+    # One agent step, and the retry is visible in its usage: two model requests.
+    assert [step.agent for step in result.steps] == ["extraction"]
+    assert result.usage.requests == 2
     retries = [p for p in seen[1][-1].parts if isinstance(p, RetryPromptPart)]
     assert "is not an email address" in str(retries[0].content)
 
@@ -45,7 +50,8 @@ async def test_a_bad_email_is_sent_back_for_correction():
 async def test_a_contact_with_no_way_to_reach_them_is_rejected():
     model, _ = answers({"name": "Ada"}, {"name": "Ada", "phone": "+44 20 7946 0958"})
     with extraction_agent.override(model=model):
-        contact = await run_extraction("Ada, 020 7946 0958")
+        result = await run_extraction("Ada, 020 7946 0958")
+        contact = result.output
     assert contact.phone == "+44 20 7946 0958"
 
 

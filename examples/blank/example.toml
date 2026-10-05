@@ -5,6 +5,5 @@ smoke_input = "Hello, what can you do?"
 templated = true  # `blank` / `Blank` in the source are replaced by the name you choose
 
 [entrypoint]
-agent = "blank_agent"
 deps = "BlankDeps"
 run = "run_blank_agent"

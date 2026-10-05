@@ -48,11 +48,14 @@ def workers(fail_on: set[str] = frozenset(), stats: dict | None = None):
 async def test_every_perspective_is_analyzed_and_summarized():
     seen: list[str] = []
     with worker_agent.override(model=workers()), aggregator_agent.override(model=summarizer(seen)):
-        output = await run_fan_out("a topic")
+        result = await run_fan_out("a topic")
+        output = result.output
 
     assert output.result == "summary"
     assert output.perspectives_used == PERSPECTIVES
     assert output.perspectives_failed == []
+    # Three workers (in completion order), then the aggregator.
+    assert [step.agent for step in result.steps] == ["fan_out.worker"] * 3 + ["fan_out.aggregator"]
     assert all(f"finding about {p}" in seen[0] for p in PERSPECTIVES)
 
 
@@ -72,9 +75,11 @@ async def test_a_failed_worker_is_reported_and_the_rest_still_count():
         worker_agent.override(model=workers(fail_on={"risks"})),
         aggregator_agent.override(model=summarizer(seen)),
     ):
-        output = await run_fan_out("a topic")
+        result = await run_fan_out("a topic")
+        output = result.output
 
     assert output.perspectives_failed == ["risks"]
+    assert len(result.steps) == 3  # the two workers that succeeded, and the aggregator
     assert output.perspectives_used == ["benefits", "drawbacks"]
     assert "finding about risks" not in seen[0]
 

@@ -9,7 +9,7 @@ To use:
     1. Define your output type (or use str for unstructured output)
     2. Set your instructions
     3. Add tools if needed
-    4. Call run_agent()
+    4. Call run_agent() and read `.output` from the RunResult it returns
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from pydantic_ai.usage import UsageLimits
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
 from agent.prompts.templates import load_prompt
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
@@ -91,7 +92,7 @@ agent: Agent[AgentDeps, AgentOutput] = Agent(
 #     return f"Today is {date.today()}."
 
 
-async def run_agent(user_input: str, deps: AgentDeps | None = None) -> AgentOutput:
+async def run_agent(user_input: str, deps: AgentDeps | None = None) -> RunResult[AgentOutput]:
     """Run the agent with the given user input.
 
     Args:
@@ -99,17 +100,19 @@ async def run_agent(user_input: str, deps: AgentDeps | None = None) -> AgentOutp
         deps: Runtime dependencies. Created with defaults if not provided.
 
     Returns:
-        Validated AgentOutput instance.
+        A RunResult: `.output` is the validated AgentOutput, `.usage` the total usage, and
+        `.steps[0].result` the native Pydantic AI result (messages, run id, ...).
     """
     if deps is None:
         deps = AgentDeps()
 
     logger.info("Running single agent", extra={"user_input": user_input})
 
-    result = await agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
+    flow = Flow(USAGE_LIMITS)
+    result = await flow.run(agent, user_input, deps=deps)
 
     logger.info("Agent run complete", extra={"output": result.output})
-    return result.output
+    return flow.finish(result.output)
 
 
 # --- Multi-turn conversation example ---
@@ -131,5 +134,5 @@ if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    output = asyncio.run(run_agent("Hello, what can you do?"))
-    print(output)
+    result = asyncio.run(run_agent("Hello, what can you do?"))
+    print(result.output)

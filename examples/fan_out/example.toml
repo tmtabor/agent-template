@@ -4,6 +4,5 @@ summary = "Run workers in parallel with asyncio.gather, tolerate a failed worker
 smoke_input = "Adopting a monorepo"
 
 [entrypoint]
-agent = "worker_agent"
 deps = "FanOutDeps"
 run = "run_fan_out"

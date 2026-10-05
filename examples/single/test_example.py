@@ -13,7 +13,8 @@ tests/test_safety_net.py for opting in to a tool call.
 
 from pydantic_ai.models.test import TestModel
 
-from examples.single.agent import AgentDeps, agent
+from agent.runs import RunResult
+from examples.single.agent import AgentDeps, agent, run_agent
 
 
 async def test_agent_runs_with_test_model():
@@ -46,3 +47,15 @@ async def test_agent_message_history():
     assert result2.output is not None
     # History from both turns is available
     assert len(result2.all_messages()) > len(result1.all_messages())
+
+
+async def test_run_agent_returns_a_run_result():
+    """run_agent wraps the native result: `.output`, total `.usage`, and the single step."""
+    with agent.override(model=TestModel(call_tools=[])):
+        result = await run_agent("Test input")
+
+    assert isinstance(result, RunResult)
+    assert result.output is not None
+    assert [step.agent for step in result.steps] == ["single"]
+    assert result.steps[0].result.output == result.output  # the native result, untouched
+    assert result.usage.requests == 1

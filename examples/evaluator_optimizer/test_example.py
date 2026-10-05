@@ -43,7 +43,8 @@ async def test_a_draft_the_critic_accepts_is_returned_after_one_round():
         generator_agent.override(model=generator(prompts)),
         critic_agent.override(model=critic([True])),
     ):
-        output = await run_evaluator_optimizer("a bottle")
+        result = await run_evaluator_optimizer("a bottle")
+        output = result.output
 
     assert (output.result, output.accepted, output.iterations) == ("draft 1", True, 1)
     assert len(prompts) == 1
@@ -55,10 +56,17 @@ async def test_feedback_and_the_previous_draft_go_back_to_the_generator():
         generator_agent.override(model=generator(prompts)),
         critic_agent.override(model=critic([False, True])),
     ):
-        output = await run_evaluator_optimizer("a bottle")
+        result = await run_evaluator_optimizer("a bottle")
+        output = result.output
 
     assert (output.result, output.accepted, output.iterations) == ("draft 2", True, 2)
     assert "make it shorter" in prompts[1]
+    assert [step.agent for step in result.steps] == [
+        "evaluator_optimizer.generator",
+        "evaluator_optimizer.critic",
+        "evaluator_optimizer.generator",
+        "evaluator_optimizer.critic",
+    ]
     assert "draft 1" in prompts[1]
 
 
@@ -68,7 +76,8 @@ async def test_a_critic_that_is_never_satisfied_is_capped_not_looped():
         generator_agent.override(model=generator(prompts)),
         critic_agent.override(model=critic([False] * MAX_ITERATIONS)),
     ):
-        output = await run_evaluator_optimizer("a bottle")
+        result = await run_evaluator_optimizer("a bottle")
+        output = result.output
 
     assert output.accepted is False
     assert output.iterations == MAX_ITERATIONS

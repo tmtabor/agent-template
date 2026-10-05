@@ -21,5 +21,8 @@ outline → draft → polish     (code decides the order; the model never does)
 uv run python scripts/add_agent.py pipeline --name article
 ```
 
-Adapt it by changing the steps and what each one returns. The smoke tests drive
-`outline_agent` (the first step); `examples/pipeline/test_example.py` tests the chain itself.
+`run_pipeline` returns a `RunResult`: `.output` is the piece, `.steps` the three steps in order,
+and `.usage` the total across all of them.
+
+Adapt it by changing the steps and what each one returns. The generic smoke test runs the whole
+chain offline; `examples/pipeline/test_example.py` tests the gate and the shared budget.

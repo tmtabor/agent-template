@@ -23,6 +23,11 @@ have cloned the template: what changed, and whether you need to do anything.
   `add_agent.py`; the shared evaluators moved to `evals/helpers.py`. Copy your fixtures to the
   new file name.
 - **`agent/prompts/system.txt` is gone.** Each agent has `agent/prompts/<name>.txt`.
+- **`run_*` helpers return a `RunResult`, not the bare output.** Read `.output` for what you
+  used to get back: `result = await run_agent(...)`, then `result.output`. `result.usage` is the
+  total usage and `result.steps` records each agent run (`result.steps[0].result` is the native
+  Pydantic AI result). Applies to `run_agent`, `run_tool_agent`, `run_supervisor` and every new
+  example's helper; agents you copy with `add_agent.py` get the same shape.
 - **The `agent-web-ui` skill's `chat.py` imports one agent module** you point it at (see the
   skill's "Before you start"), instead of the canonical names.
 
@@ -33,7 +38,7 @@ have cloned the template: what changed, and whether you need to do anything.
   (or `add_agent.py <example> --name <name>`) that copies the example, its prompt, and
   scaffolds a smoke test and an eval starter. `--prune` removes the examples you don't need.
 - Tests parametrized over every example (`tests/test_examples.py`, content-filter and
-  cost-limit tests), and `tests/test_add_agent.py`, which runs the real script into a scratch
+  cost-limit tests); the smoke test drives each example's whole flow and checks the result, and `tests/test_add_agent.py`, which runs the real script into a scratch
   copy of the repo and checks that what it generates imports, passes its own smoke test and
   lint, and has collectable evals.
 - Five more examples: `extraction` (output validator + retry budget), `router` (classifier
@@ -42,8 +47,11 @@ have cloned the template: what changed, and whether you need to do anything.
   cap). Each has its own `test_example.py` covering its orchestration.
 - `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
   gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
-- Optional `[smoke_output]` in `example.toml`, for agents whose output validators reject
-  `TestModel`'s generated junk.
+- `agent/runs.py`: `RunResult` (output, total usage, per-step results) and `Flow`, which runs
+  agents against one shared budget and records each step. Every example's `run_*` returns a
+  `RunResult`, so tests, evals and callers can see how an answer was produced.
+- Per-agent `[smoke.<agent>]` tables in `example.toml` (`call_tools`, `output`), for agents whose
+  smoke tests need a tool called or whose validators reject `TestModel`'s generated junk.
 - `evals/helpers.py`: shared eval evaluators, fixture loader and dataset runner.
 - `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
 

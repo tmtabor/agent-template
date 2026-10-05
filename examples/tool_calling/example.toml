@@ -4,6 +4,5 @@ summary = "An agent that calls tools against external systems, with the three-ou
 smoke_input = "What can you find out about Python 3.13?"
 
 [entrypoint]
-agent = "tool_agent"
 deps = "ToolAgentDeps"
 run = "run_tool_agent"

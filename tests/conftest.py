@@ -16,11 +16,11 @@ import sys  # noqa: E402
 from contextlib import ExitStack  # noqa: E402
 
 import pytest  # noqa: E402
-from pydantic_ai import Agent  # noqa: E402
 from pydantic_ai.models.test import TestModel  # noqa: E402
 
 import agent.agents  # noqa: E402
 from agent.logging import configure_logging  # noqa: E402
+from tests.agent_finder import agents_in  # noqa: E402
 
 # Module-name prefixes whose Agent instances the safety net overrides: your agents,
 # and the examples (which tests run in place).
@@ -50,17 +50,6 @@ def _preimport_agent_modules() -> None:
             if exc.name and exc.name.split(".")[0] in {"examples", "agent"}:
                 raise
             # A third-party dependency this example declares but the root env lacks.
-
-
-def _agents_in(value) -> list[Agent]:
-    """The Agent(s) a module-level value holds: the value itself, or a dict/list/tuple/set of them."""
-    if isinstance(value, Agent):
-        return [value]
-    if isinstance(value, dict):
-        value = value.values()
-    if isinstance(value, list | tuple | set | frozenset | type({}.values())):
-        return [v for v in value if isinstance(v, Agent)]
-    return []
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -94,7 +83,7 @@ def override_all_agents_with_test_model():
         for name, module in list(sys.modules.items()):
             if name.startswith(OVERRIDDEN_PREFIXES) and module is not None:
                 for value in vars(module).values():
-                    for found in _agents_in(value):
+                    for found in agents_in(value):
                         if id(found) not in seen:
                             seen.add(id(found))
                             stack.enter_context(found.override(model=TestModel(call_tools=[])))

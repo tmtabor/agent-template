@@ -27,7 +27,7 @@ def project(tmp_path: Path) -> Path:
     for name in COPIED:
         shutil.copytree(REPO_ROOT / name, tmp_path / name, ignore=ignore)
     (tmp_path / "tests").mkdir()
-    for name in ("__init__.py", "conftest.py", "examples_support.py"):
+    for name in ("__init__.py", "conftest.py", "agent_finder.py", "examples_support.py"):
         shutil.copy(REPO_ROOT / "tests" / name, tmp_path / "tests" / name)
     shutil.copy(REPO_ROOT / "pyproject.toml", tmp_path / "pyproject.toml")
     # A fresh clone has no agents; guard against this repo gaining one by accident.

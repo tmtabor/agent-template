@@ -18,15 +18,16 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import RaiseContentFilterError
-from pydantic_ai.usage import RunUsage, UsageLimits
+from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
 from agent.logging import agent_label, configure_logging, get_logger
+from agent.runs import Flow, RunResult
 
 logger = get_logger(__name__)
 LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
 
-# One budget for the whole chain: every step shares a RunUsage (see run_pipeline).
+# One budget for the whole chain: every step runs in one Flow (see run_pipeline).
 USAGE_LIMITS = UsageLimits(
     request_limit=15, total_tokens_limit=150_000, cost_limit=settings.cost_limit
 )
@@ -96,8 +97,14 @@ class EmptyOutlineError(Exception):
     """The outline step produced nothing to draft from."""
 
 
-async def run_pipeline(user_input: str, deps: PipelineDeps | None = None) -> PipelineOutput:
+async def run_pipeline(
+    user_input: str, deps: PipelineDeps | None = None
+) -> RunResult[PipelineOutput]:
     """Write a short piece on `user_input` in three chained steps.
+
+    Returns:
+        A RunResult: `.output` is the PipelineOutput; `.steps` holds the outline, draft and
+        polish steps in order.
 
     Raises:
         EmptyOutlineError: When step 1 returns no points. Failing here is the payoff of a
@@ -105,24 +112,23 @@ async def run_pipeline(user_input: str, deps: PipelineDeps | None = None) -> Pip
     """
     if deps is None:
         deps = PipelineDeps()
-    usage = RunUsage()  # shared, so USAGE_LIMITS bounds the whole chain
-    run_args = {"deps": deps, "usage": usage, "usage_limits": USAGE_LIMITS}
+    flow = Flow(USAGE_LIMITS)  # one shared budget, so USAGE_LIMITS bounds the whole chain
 
-    outline = (await outline_agent.run(f"Topic: {user_input}", **run_args)).output
+    outline = (await flow.run(outline_agent, f"Topic: {user_input}", deps=deps)).output
     # A gate between steps: plain code checking the previous step's typed output.
     if not outline.points:
         raise EmptyOutlineError(f"No outline was produced for: {user_input!r}")
     logger.info("Outline ready", extra={"points": len(outline.points)})
 
     numbered = "\n".join(f"{i}. {point}" for i, point in enumerate(outline.points, 1))
-    draft = (await draft_agent.run(f"Outline:\n{numbered}", **run_args)).output
-    polished = (await polish_agent.run(f"Draft:\n{draft.text}", **run_args)).output
+    draft = (await flow.run(draft_agent, f"Outline:\n{numbered}", deps=deps)).output
+    polished = (await flow.run(polish_agent, f"Draft:\n{draft.text}", deps=deps)).output
 
-    return PipelineOutput(result=polished.result, outline=outline.points)
+    return flow.finish(PipelineOutput(result=polished.result, outline=outline.points))
 
 
 if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    print(asyncio.run(run_pipeline("Why unit tests are worth writing")))
+    print(asyncio.run(run_pipeline("Why unit tests are worth writing")).output)

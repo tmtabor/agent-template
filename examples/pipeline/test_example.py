@@ -37,9 +37,16 @@ async def test_each_step_receives_the_previous_steps_output():
         draft_agent.override(model=returns({"text": "a rough draft"}, draft_in)),
         polish_agent.override(model=returns({"result": "a polished piece"}, polish_in)),
     ):
-        output = await run_pipeline("testing")
+        result = await run_pipeline("testing")
+        output = result.output
 
     assert output.result == "a polished piece"
+    assert [step.agent for step in result.steps] == [
+        "pipeline.outline",
+        "pipeline.draft",
+        "pipeline.polish",
+    ]
+    assert result.usage.requests == 3
     assert output.outline == ["first point", "second point"]
     assert "1. first point" in draft_in[0] and "2. second point" in draft_in[0]
     assert "a rough draft" in polish_in[0]

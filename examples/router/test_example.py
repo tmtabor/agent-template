@@ -31,13 +31,17 @@ async def test_each_category_reaches_its_own_specialist(category):
         for override in overrides:
             override.__enter__()
         try:
-            output = await run_router("anything")
+            result = await run_router("anything")
+            output = result.output
         finally:
             for override in reversed(overrides):
                 override.__exit__(None, None, None)
 
     assert output.category == category
     assert output.result == f"{category} answer"
+    # The result records the route taken: the classifier, then that category's specialist.
+    assert [step.agent for step in result.steps] == ["router.classifier", f"router.{category}"]
+    assert result.usage.requests == 2
 
 
 def test_the_classifier_can_only_return_a_known_category():
