@@ -1,6 +1,7 @@
 # Example agent library — plan
 
-Status: steps 1-3 implemented (step 3 not yet committed); steps 4-7 pending. Date: 2026-10-05.
+Status: steps 1-3 implemented; step 4 built and tested, with the committed transcripts waiting on a
+provider key; steps 5-7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -53,7 +54,7 @@ title = "Supervisor / workers"
 pattern = "supervisor"            # category used for the index and docs nav
 summary = "One-line description."
 smoke_input = "Input for the release check."
-expected_tools = ["delegate_to_worker_a"]   # tools that must be called in smoke runs
+expected_tools = ["delegate_to_analyst"]   # tools that must be called in smoke runs
 cost_budget_usd = 0.10            # live smoke run must stay under this
 dependencies = []                 # PEP 508 requirements beyond the template's own
 env = []                          # extra environment variables required
@@ -64,7 +65,7 @@ deps = "SharedDeps"
 run = "run_supervisor"            # async (user_input) -> RunResult, see "Run results"
 
 [smoke.supervisor_agent]          # per-agent TestModel config for offline smoke tests
-call_tools = ["delegate_to_worker_a"]   # (`output = {...}` is also accepted)
+call_tools = ["delegate_to_analyst"]   # (`output = {...}` is also accepted)
 ```
 
 (`expected_tools` and `cost_budget_usd` belong to the live tier, step 4. The key set built so far
@@ -162,8 +163,8 @@ Template code that used the canonical agent must change:
 2. **Live tier, before release.** `scripts/release_check.py` runs each example's
    `smoke_input` against the real model in an isolated environment. Checks: the
    output validates, `expected_tools` were called, and cost stays within
-   `cost_budget_usd`. It also refreshes each `sample_run.md`. Run it from a `workflow_dispatch` or tag-triggered CI
-   job with the API secret, or locally.
+   `cost_budget_usd`. It also refreshes each `sample_run.md`. Run it by hand, locally, before a
+   release; it is deliberately not part of CI (it spends money and needs a key).
 3. `scripts/record_example.py <name>` regenerates one example's `sample_run.md`.
 
 ## Pattern roadmap
@@ -260,7 +261,7 @@ agent the tests happen to drive"). `[entrypoint]` keeps `deps` and `run`.
 
 ```toml
 [smoke.supervisor_agent]
-call_tools = ["delegate_to_worker_a"]
+call_tools = ["delegate_to_analyst"]
 
 [smoke.extraction_agent]
 output = { name = "Ada Lovelace", email = "ada@example.com" }
@@ -325,8 +326,8 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
    changelog. Done when the generic smoke test drives each example's whole flow through
    `run` and asserts on the returned steps.
 4. **Live verification.** `release_check.py`, `record_example.py` (which builds
-   `sample_run.md` from a `RunResult`), the isolated per-example runs and the release CI
-   job. Commit the `sample_run.md` files here.
+   `sample_run.md` from a `RunResult`), the isolated per-example runs and the coverage gate, all run
+   manually and locally (no CI job). Commit the `sample_run.md` files here.
 5. **Docs site.** MkDocs Material config, gen-files generation, Pages workflow,
    README links.
 6. **Remaining roadmap examples:** RAG/retrieval, human-in-the-loop, conversational
@@ -362,6 +363,81 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
   documented workflow; covered by the changelog entry.
 - Copying an example under a new name must rewrite its prompt paths correctly;
   the temp-repo test of `add_agent.py` guards this.
+
+## Implementation notes (step 4, as built)
+
+- **`scripts/live_run.py`:** the shared, offline-testable core. `run_live` times one real call to
+  an example's `run`; `verify` lists what is wrong in plain English (not a `RunResult`, no steps,
+  a step not labeled for the example, an `expected_tools` entry never called, cost over budget);
+  `render_transcript` builds `sample_run.md` purely from the `RunResult`. Per-step tokens and
+  cost come from each `ModelResponse` (steps share one cumulative `RunUsage`, so it cannot be
+  split per step); cost is `None` when Pydantic AI has no price for the model (Ollama, `test`).
+- **`scripts/record_example.py`:** the per-example worker (`<name>...|--all`, `--no-write`,
+  `--json`). All examples in one invocation share one event loop. A failed check never
+  overwrites the last good transcript.
+- **`scripts/release_check.py`:** the orchestrator. Offline suite first (stop if it fails), then
+  each example in its own `uv run [--with <dep>...] python scripts/record_example.py` process,
+  with `AGENT_COST_LIMIT` set to its `cost_budget_usd` (skipped for `ollama:` models, whose cost
+  can't be computed). An example with extra dependencies runs its own offline tests in that
+  isolated environment first, and a failure there skips the live (paid) call. A summary gives
+  pass/fail/unverified counts, tokens and spend, and the exit code gates on it.
+- **Manifest:** optional `expected_tools` (set for `supervisor` and `tool_calling`) and
+  `cost_budget_usd` (default 0.25).
+- **`services`:** examples that declare them are reported *unverified* and fail the check unless
+  `--allow-unverified`. Starting and stopping the services themselves is deferred to step 7,
+  where Temporal is the first example that needs it.
+- **No CI.** The gate is a manual, local step by design (it spends money and needs a key); an
+  earlier draft added a `release-check` workflow, which was removed. `.github/workflows/ci.yml`
+  still runs only the offline suite. Transcripts are recorded locally with `--record` and
+  committed.
+- **Prune:** `add_agent.py --prune` removes the release tooling and its tests.
+- **Tested offline** (`tests/test_live_tools.py`): transcripts and verification from real
+  examples run under `TestModel`, plus the orchestration with fake subprocess runners. The live
+  path was also exercised for free against a local Ollama model: the offline suite, then three
+  examples in isolated processes, with correct pass/fail reporting.
+- **Scope grew once real models were involved.** The requirement became: every agent in every
+  example runs to completion against a real model and is verified, with no untested example
+  code. Running the gate against Gemini 3.1 Flash-Lite found real defects that no offline test
+  could (`TestModel` ignores tool results and instructions):
+  - `tool_calling`'s tool echoed its query, so the model searched until it hit the request
+    limit. It now looks up Python release notes in an injected table, with all three error
+    outcomes (`ModelRetry` for a malformed version, `ToolFailed` for an unknown one).
+  - `supervisor`'s only worker had the instructions `[TASK TYPE A]`. It now coordinates a real
+    analyst and writer, and the smoke input explicitly asks for research then writing (with a
+    vaguer input the model legitimately skipped the analyst).
+  - `evaluator_optimizer`'s critic rejected even ordinary adjectives, so the loop burned the
+    whole cap. Its criteria now target factual claims; it converges in two or three rounds and
+    still refuses an item whose own name makes an unverifiable claim.
+- **Live tests per example** (`examples/<name>/test_live.py`, marked `eval`): inputs with an
+  unambiguous expected result, semantic assertions, a requirement that every `Agent` the module
+  defines ran (read from spans by `evals/trace.py:traced_run`, since a supervisor's workers run
+  inside a tool call and are in no step), and a run of the module's `__main__` demo (via
+  `runpy` with `alter_sys=True`, so Pydantic can resolve forward references as under
+  `python -m`). Where the real model varies (how many rounds the critic takes) the tests assert
+  the loop's invariants for whichever path occurs.
+- **Coverage gate:** `coverage` (dev dependency) measures `examples/*/agent.py` over the offline
+  and live tests together; `fail_under = 100`. It caught an untested branch in `fan_out`
+  (cancellation must propagate, not count as a failed worker), now covered.
+- **Release check order:** offline suite (under coverage) → per example in isolation: offline
+  tests if it has dependencies, live tests, smoke run + transcript → coverage gate → summary.
+  A failure stops that example before the next paid stage.
+- **Model-agnostic by design.** The gate must work however `.env` is configured:
+  - *Offline suite:* a root `conftest.py` forces `AGENT_MODEL=test` at import time unless the
+    command line selects the live tests, so it no longer depends on `.env`'s model or key (it
+    used to crash on import when `.env` named a provider whose key was absent). It reads `-m`
+    from `sys.argv`/`PYTEST_ADDOPTS` because `tests/conftest.py` imports `agent.config` before
+    any pytest hook runs.
+  - *Live assertions:* checked against a second, very different model (a local 30B Ollama
+    model), which exposed assertions that encoded Gemini's behavior: exact request counts (a
+    model may need an output retry), `phone is None` (a model wrote the string `"None"`), a list
+    of "unavailable" phrases, and a requirement that the supervisor not research a simple
+    request. They now assert properties that hold for any capable model.
+  - *What remains is a capability floor:* the model must call tools and return valid structured
+    output. A model that can't fails with Pydantic validation errors, which is a verdict on the
+    model, not the example.
+  - Transcripts record their model in the header; `--record` overwrites them.
+- **Still to do for this step:** commit the recorded `sample_run.md` files, link them from the
+  example READMEs, and add a test that every example has one.
 
 ## Implementation notes (step 3, as built)
 
