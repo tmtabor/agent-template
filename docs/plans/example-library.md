@@ -1,7 +1,7 @@
 # Example agent library — plan
 
-Status: steps 1-6 implemented, including the services machinery (step 5 awaits the one-time Pages
-setting); step 7 pending. Date: 2026-10-05.
+Status: steps 1-6 and 7a (Monty) implemented, including the services machinery (step 5 awaits the
+one-time Pages setting); 7b (Temporal) pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -462,6 +462,35 @@ inherits a tested lifecycle instead of building and debugging one. `mcp_tools` i
 - **For step 7:** Temporal reuses all of this. It needs a `service/docker-compose.yml` that
   publishes 7233 (the image `temporalio/temporal` is already on this machine), a `[service.temporal]`
   table with `env = "TEMPORAL_ADDRESS"`, and a healthcheck.
+
+## Implementation notes (step 7a, Monty, as built)
+
+- **What it is.** Not `pydantic-monty` used directly: Pydantic AI's integration lives in a separate
+  package, `pydantic-ai-harness`, whose `CodeMode` capability hides the agent's regular tools behind
+  one `run_code` tool; the model writes Python that calls them as `await tool(arg=...)`, run in the
+  Monty sandbox. The example is `code_mode`; its extra is `pydantic-ai-harness[code-mode]` (which
+  pulls in `pydantic-monty`). The harness is pre-1.0 and its minor tracks Pydantic AI's, so the pin is
+  `>=0.54,<1` and the two are bumped together.
+- **Domain:** expense reports, invented and deterministic (23 expenses, five currencies, three
+  employees): a question needs many tool calls and exact arithmetic, which is what code is for. A deps
+  ledger (`deps.calls`) records every tool call that really ran on the host, so tests check what the
+  model's code *did*, not what it said.
+- **Measured:** with `Literal` categories in the tool types the model needed 2-3 requests for 14-72
+  host tool calls and got the exact answers; without them it compared against `'Travel'`, failed, and
+  needed 5-6. The prompt also warns about two Monty limits found by testing: `next()` over a generator
+  expression fails (a generator expression evaluates to a list), and the code is type-checked against
+  tool signatures before running (`x = None` then passed as `str` is rejected).
+- **Sandbox tests are real:** hostile code runs in the real sandbox, and the assertions are about the
+  host: a file not created, a secret not returned, exactly `MAX_TOOL_CALLS` calls reaching the host
+  for a 1000-iteration loop, a `while True` stopped at `max_duration_secs`, a memory bomb refused,
+  `socket` / `subprocess` unresolvable, `time.time()` unsupported. The sandbox has no `open` at all
+  until `os` is imported, so the tests assert the invariant, not Monty's wording.
+- **Live:** three questions with answers worked out independently (a total across currencies,
+  `1520.12`; the employee with the most meal spend, `E3` at `296.78`; one conversion, `121.94`), plus
+  a check that the host-side tool calls are at least 3x the model requests (the pattern's payoff).
+- **Transcripts** render a `run_code` call as the code the model wrote, not a clipped argument.
+- **First example with a runtime `dependencies` entry**, so `add_agent.py`'s `uv add` is now exercised
+  by a real example, not a synthetic one.
 
 ## Implementation notes (step 5, as built)
 
