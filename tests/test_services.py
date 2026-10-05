@@ -5,6 +5,7 @@ part, and the tests check what was run, in what order, and that teardown always 
 """
 
 import dataclasses
+import re
 from pathlib import Path
 
 import pytest
@@ -401,4 +402,10 @@ def test_a_compose_file_publishes_to_localhost_only_and_has_a_healthcheck(name):
         assert spec.name in text
         assert f'"127.0.0.1::{spec.port}"' in text  # loopback only, with a host port Docker picks
     assert "healthcheck:" in text
-    assert (ex.service_dir / "Dockerfile").is_file()
+    # The service is either built here (a Dockerfile next to the compose file) or a published image,
+    # which must be pinned to a version: `latest` would let the release check change under you.
+    if not (ex.service_dir / "Dockerfile").is_file():
+        images = re.findall(r"^\s*image:\s*(\S+)", text, flags=re.MULTILINE)
+        assert images, "a service needs a Dockerfile or an image"
+        for image in images:
+            assert ":" in image and not image.endswith(":latest"), f"pin {image} to a version"

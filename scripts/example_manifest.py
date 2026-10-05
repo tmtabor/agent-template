@@ -269,6 +269,7 @@ DISPLAY_ORDER = [
     "rag",
     "mcp_tools",
     "code_mode",
+    "temporal",
     "conversation",
     "human_in_the_loop",
     "guardrails",

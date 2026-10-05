@@ -64,6 +64,13 @@ have cloned the template: what changed, and whether you need to do anything.
   `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
   need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
   `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
+- `temporal`, an example of a durable agent: `TemporalDurability` turns the agent's model requests and
+  tool calls into Temporal activities and its loop into a workflow, so a failing tool is retried
+  without asking the model again, and a worker killed mid-run is replaced by another that finishes it.
+  The Temporal server is a Docker service (`service/`, image pinned). Its tests run against the real
+  server and read its event history: they kill a worker (tidily, and with `SIGKILL` of a separate
+  process), exhaust the retry policy, refuse a non-retryable failure a retry, and check that a run
+  that cannot finish raises `RunTimedOut` instead of hanging.
 - `code_mode`, an example of Pydantic AI's code mode (`pydantic-ai-harness`'s `CodeMode`, running the
   model's Python in the Monty sandbox): the model writes code that calls the agent's tools in loops,
   so a question that needs dozens of tool calls and exact arithmetic takes two or three model

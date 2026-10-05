@@ -106,6 +106,7 @@ its prompt, a README and an `example.toml`:
 | `rag` | Answer from your own documents with a search tool, and cite only what was really retrieved |
 | `mcp_tools` | Use the tools of an MCP server that runs as its own Docker service |
 | `code_mode` | The model writes Python that calls your tools in a sandbox (Monty): exact answers from one or two requests (needs `pydantic-ai-harness`) |
+| `temporal` | A durable agent run as a Temporal workflow: failing tools are retried and a crashed worker is replaced, without repeating model calls (Temporal runs as a Docker service; needs `temporalio`) |
 | `conversation` | Memory across turns, a bounded context window, and streaming |
 | `human_in_the_loop` | Pause a risky tool call for approval, reject impossible ones first, resume the run |
 | `guardrails` | Check input in code and with a guard model, validate output, turn failures into safe answers |
@@ -123,9 +124,10 @@ For each agent, `add_agent.py`:
 - scaffolds an eval starter, `evals/test_<name>.py`, with a fixture file at
   `evals/fixtures/<name>.json`,
 - copies the example's service, if it has one, to `services/<name>/` (`mcp_tools` ships its MCP
-  server, a Dockerfile and a compose file) and tells you how to start it,
+  server, a Dockerfile and a compose file; `temporal` a compose file for the Temporal server) and
+  tells you how to start it,
 - runs `uv add` for any extra dependencies the example declares (`code_mode` needs
-  `pydantic-ai-harness[code-mode]`), and tells you about any environment variables it needs.
+  `pydantic-ai-harness[code-mode]`, `temporal` needs `temporalio`), and tells you about any environment variables it needs.
 
 There is no shared "primary" agent. Import each agent directly from its own module. Every
 `run_*` helper returns the same thing, a `RunResult` (`agent/runs.py`):

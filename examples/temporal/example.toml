@@ -1,0 +1,23 @@
+title = "Temporal"
+pattern = "temporal"
+summary = "Run an agent as a durable Temporal workflow: failing tools are retried and a crashed worker is replaced, without repeating the model calls that already finished."
+smoke_input = "I'd like to order 3 gizmos for Norway. Are they in stock, and what is the shipping?"
+# A real model must use both tools rather than guess (checked by the release check).
+expected_tools = ["check_stock", "shipping_quote"]
+
+# The one thing the agent needs beyond the template: the Temporal Python SDK. (Pydantic AI's
+# `temporal` extra is only this package.)
+dependencies = ["temporalio>=1.34,<2"]
+
+# The server runs as a docker-compose service (service/). The release check starts it, finds the
+# port Docker chose, and passes the address to the example in TEMPORAL_ADDRESS.
+services = ["temporal"]
+
+[service.temporal]
+port = 7233
+env = "TEMPORAL_ADDRESS"
+url = "{address}"
+
+[entrypoint]
+deps = "DeskDeps"
+run = "run_order_desk"

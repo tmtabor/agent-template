@@ -1,0 +1,19 @@
+# A Temporal development server, as a service. Start it by hand with:
+#     docker compose up -d --wait
+# scripts/release_check.py starts and stops it for you when it checks the example. (Its web UI is
+# on port 8233 inside the container: publish it too if you want to watch the workflows run.)
+services:
+  temporal:
+    # The CLI's own version tag, pinned so the release check runs against the same server every time.
+    image: temporalio/temporal:1.8.0
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--headless"]
+    ports:
+      # Publish on 127.0.0.1 only, on a free host port (the first field is left empty so Docker
+      # picks one); `docker compose port temporal 7233` says which.
+      - "127.0.0.1::7233"
+    healthcheck:
+      # Healthy once the server answers a cluster health check, so `up --wait` returns when it is ready.
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
+      interval: 1s
+      timeout: 3s
+      retries: 40
