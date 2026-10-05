@@ -14,7 +14,7 @@ uv run python scripts/add_agent.py router --name support
 | [`tool_calling`](tool_calling/) | An agent that calls tools against external systems, with the three-outcome error convention. | [recorded run](tool_calling/sample_run.md) |
 | [`extraction`](extraction/) | Turn free text into a validated schema, with an output validator that sends bad answers back for correction. | [recorded run](extraction/sample_run.md) |
 | [`rag`](rag/) | Answer from your own documents with a search tool, and cite only passages the model really retrieved. | [recorded run](rag/sample_run.md) |
-| [`mcp_tools`](mcp_tools/) | Give an agent the tools of a Model Context Protocol server: discovered at run time, called over MCP, with server errors the model can correct. | [recorded run](mcp_tools/sample_run.md) |
+| [`mcp_tools`](mcp_tools/) | Give an agent the tools of a Model Context Protocol server running as its own service: discovered at run time, called over the network, with server errors the model can correct. | [recorded run](mcp_tools/sample_run.md) |
 | [`conversation`](conversation/) | Remember earlier turns with message history, bound the context window by turns, and stream replies as they are generated. | [recorded run](conversation/sample_run.md) |
 | [`human_in_the_loop`](human_in_the_loop/) | Pause a risky tool call until a person approves it; reject impossible requests before anyone is asked; resume the same run. | [recorded run](human_in_the_loop/sample_run.md) |
 | [`guardrails`](guardrails/) | Check input in code and with a small guard model, validate output, and turn provider filters and budget limits into safe answers. | [recorded run](guardrails/sample_run.md) |

@@ -59,13 +59,14 @@ ignore = ["E501"]
 known-first-party = ["agent", "examples", "example_manifest", "add_agent"]
 combine-as-imports = true
 
-# Line coverage of the example source, measured over the offline and live (`eval`) tests
-# together by scripts/release_check.py. Every line of examples/*/agent.py must be exercised.
+# Line coverage of the example source (each agent, and the server of an example that ships one),
+# measured over the offline and live (`eval`) tests together by scripts/release_check.py. Every
+# line must be exercised.
 [tool.coverage.run]
 source = ["examples"]
 
 [tool.coverage.report]
-include = ["examples/*/agent.py"]
+include = ["examples/*/agent.py", "examples/*/service/server.py"]
 show_missing = true
 skip_covered = false
 fail_under = 100

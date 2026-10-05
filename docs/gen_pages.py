@@ -226,6 +226,12 @@ def example_page(example: Example, pages: dict[str, str]) -> str:
     for name in ("test_example.py", "test_live.py"):
         if (example.path / name).exists():
             tabs.append((name, "python", read(f"{directory}/{name}")))
+    # An example that runs as a service ships the service too: the server, its image, its compose file.
+    if example.service_dir.is_dir():
+        for path in sorted(example.service_dir.iterdir()):
+            if path.is_file():
+                language = {".py": "python", ".yml": "yaml"}.get(path.suffix, "dockerfile")
+                tabs.append((f"service/{path.name}", language, path.read_text(encoding="utf-8")))
     parts += [
         "## Source",
         "",

@@ -40,17 +40,28 @@ from dataclasses import dataclass
 
 from example_manifest import REPO_ROOT, Example, ManifestError, discover
 from record_example import RESULT_PREFIX, Outcome, describe, unverified
+from services import ServiceStartError, ServicesUnavailable, run_process, running
 
 Runner = Callable[[Sequence[str], dict[str, str]], "subprocess.CompletedProcess[str]"]
 
 
-def uv_run(example: Example | None, *args: str) -> list[str]:
-    """`uv run` with the example's declared dependencies layered on, for an isolated run."""
+def uv_run(example: Example | None, *args: str, tests: bool = False) -> list[str]:
+    """`uv run` with the example's declared dependencies layered on, for an isolated run.
+
+    `tests=True` adds its `test_dependencies` too: packages only its tests need (for instance the
+    server half of a library, to run a service locally), which are not part of using the agent.
+    """
     command = ["uv", "run"]
     if example is not None:
-        for requirement in example.dependencies:
+        for requirement in (*example.dependencies, *(example.test_dependencies if tests else ())):
             command += ["--with", requirement]
     return [*command, *args]
+
+
+def needs_isolation(example: Example) -> bool:
+    """Whether the generic tests would skip this example in the default environment, so it must
+    also be tested in its own: it has dependencies, or tests that need extra packages, or services."""
+    return bool(example.dependencies or example.test_dependencies or example.services)
 
 
 TRANSCRIPT_TEST = "recorded_sample_run"  # tests/test_examples.py: every example has a transcript
@@ -102,6 +113,7 @@ def offline_command(example: Example) -> list[str]:
         *GENERIC_TESTS,
         "-k",
         f"{example.name} and not {TRANSCRIPT_TEST}",
+        tests=True,
     )
 
 
@@ -111,13 +123,20 @@ def live_tests_command(example: Example) -> list[str]:
         example,
         *["coverage", "run", "-a", "-m", "pytest", "-m", "eval", "-q", "-p", "no:cacheprovider"],
         f"examples/{example.name}",
+        tests=True,
     )
 
 
 def coverage_command(examples: list[Example]) -> list[str]:
     """Report line coverage of the checked examples' source (100% is required by pyproject)."""
-    include = ",".join(f"examples/{e.name}/agent.py" for e in examples)
-    return uv_run(None, "coverage", "report", f"--include={include}")
+    files = []
+    for e in examples:
+        files.append(f"examples/{e.name}/agent.py")
+        if (e.service_dir / "server.py").is_file():
+            files.append(
+                f"examples/{e.name}/service/server.py"
+            )  # a service's code is example code too
+    return uv_run(None, "coverage", "report", f"--include={','.join(files)}")
 
 
 def live_command(example: Example, *, record: bool) -> list[str]:
@@ -194,10 +213,6 @@ def summarize(
     return Summary("\n".join(lines), ok)
 
 
-def run_process(command: Sequence[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=REPO_ROOT, env=env, capture_output=True, text=True)
-
-
 def check_examples(
     examples: list[Example],
     *,
@@ -216,25 +231,34 @@ def check_examples(
         tail = (completed.stdout or completed.stderr).strip().splitlines()[-5:]
         return Outcome(example.name, "failed", model=model, error=f"{what}: {' | '.join(tail)}")
 
-    for example in examples:
-        log(f"→ {example.name}")
-        if example.services:
-            outcomes.append(unverified(example, model))
-            continue
-        if example.dependencies:
-            offline = runner(offline_command(example), base)
+    def check_one(example: Example, env_for: dict[str, str]) -> Outcome:
+        """The three stages for one example, in this environment (which includes any services)."""
+        if needs_isolation(example):
+            offline = runner(offline_command(example), env_for)
             if offline.returncode != 0:
-                outcomes.append(failed(example, "offline tests failed in isolation", offline))
-                continue
-        env_for_example = live_env(example, base)
+                return failed(example, "offline tests failed in isolation", offline)
+        env_for_example = live_env(example, env_for)
         live_tests = runner(live_tests_command(example), env_for_example)
         if live_tests.returncode != 0:
-            outcomes.append(failed(example, "live tests failed", live_tests))
-            continue
+            return failed(example, "live tests failed", live_tests)
         completed = runner(live_command(example, record=record), env_for_example)
         outcome = parse_outcome(example, completed)
         outcome.model = outcome.model or model
-        outcomes.append(outcome)
+        return outcome
+
+    for example in examples:
+        log(f"→ {example.name}")
+        if not example.services:
+            outcomes.append(check_one(example, base))
+            continue
+        try:
+            # Start the example's docker-compose services, check it against them, and always stop them.
+            with running(example, runner, base) as service_env:
+                outcomes.append(check_one(example, {**base, **service_env}))
+        except ServicesUnavailable as exc:
+            outcomes.append(unverified(example, model, str(exc)))
+        except ServiceStartError as exc:
+            outcomes.append(Outcome(example.name, "failed", model=model, error=str(exc)))
     return outcomes
 
 
@@ -309,8 +333,11 @@ def main(argv: list[str] | None = None) -> int:
     outcomes = check_examples(selected, record=args.record, model=settings.model)
     # Coverage is only meaningful if the offline suite ran under it, so --skip-tests skips it.
     coverage = coverage_gate(selected) if measuring else None
-    # After the live stage, which (with --record) is what writes them.
-    transcripts = transcript_gate([e for e in selected if not e.services])
+    # After the live stage, which (with --record) is what writes them. An example that could not be
+    # checked (no Docker for its services) has no fresh transcript to demand: it is already reported
+    # as unverified, which fails the check on its own.
+    checked = [e for e, o in zip(selected, outcomes, strict=True) if o.status != "unverified"]
+    transcripts = transcript_gate(checked) if checked else None
     summary = summarize(
         outcomes, allow_unverified=args.allow_unverified, coverage=coverage, transcripts=transcripts
     )

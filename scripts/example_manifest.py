@@ -13,9 +13,19 @@ Schema — every key but `title`, `pattern`, `summary`, `smoke_input` and
     expected_tools = ["tool_name"]    # tools a real model must call in the live release check
     cost_budget_usd = 0.25            # the live release check fails above this (default 0.25)
     dependencies = ["httpx>=0.28"]    # PEP 508 requirements beyond the template's own
+    test_dependencies = ["x"]         # extra packages its *tests* need, which add_agent.py does not
+                                      # install into your project (e.g. a server run in the tests)
     env = ["SOME_API_KEY"]            # extra environment variables the example needs
-    services = ["temporal"]           # external services it needs running
+    services = ["mcp-server"]         # docker-compose services it needs running (service/)
     templated = false                 # true: the example's name is a placeholder to rename
+
+    # One table per entry in `services`: how the release check finds the service once Docker has
+    # started it. The compose file is service/docker-compose.yml, and should publish the container
+    # port on 127.0.0.1 with a free host port ("127.0.0.1::8000").
+    [service.mcp-server]
+    port = 8000                       # the container port the service listens on
+    env = "MCP_SERVER_URL"            # the environment variable the example reads its address from
+    url = "http://{address}/mcp"      # how the host:port address becomes that value
 
     [entrypoint]
     deps = "SharedDeps"               # deps dataclass (constructible with no arguments)
@@ -42,9 +52,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 REQUIRED = {"title", "pattern", "summary", "smoke_input", "entrypoint"}
-OPTIONAL_LISTS = ("expected_tools", "dependencies", "env", "services")
+OPTIONAL_LISTS = ("expected_tools", "dependencies", "test_dependencies", "env", "services")
 DEFAULT_COST_BUDGET_USD = 0.25
-KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke", "cost_budget_usd"}
+KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke", "cost_budget_usd", "service"}
+SERVICE_KEYS = {"port", "env", "url"}
 ENTRYPOINT_KEYS = {"deps", "run"}
 SMOKE_KEYS = {"call_tools", "output"}
 
@@ -66,6 +77,16 @@ class AgentSmoke:
 
 
 @dataclass(frozen=True)
+class ServiceSpec:
+    """How to find one docker-compose service once it is running."""
+
+    name: str
+    port: int  # the container port it listens on, published by the compose file
+    env: str  # the environment variable the example reads the service's address from
+    url: str = "{address}"  # a template for that value; {address} is the host:port Docker chose
+
+
+@dataclass(frozen=True)
 class Example:
     name: str
     path: Path
@@ -80,6 +101,8 @@ class Example:
     dependencies: tuple[str, ...] = ()
     env: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
+    service_specs: dict[str, ServiceSpec] = field(default_factory=dict)
+    test_dependencies: tuple[str, ...] = ()
     templated: bool = False
     smoke: dict[str, AgentSmoke] = field(default_factory=dict)
 
@@ -91,6 +114,15 @@ class Example:
     @property
     def source(self) -> Path:
         return self.path / "agent.py"
+
+    @property
+    def service_dir(self) -> Path:
+        """The service's own files (server, Dockerfile, compose file), if the example has any."""
+        return self.path / "service"
+
+    @property
+    def compose_file(self) -> Path:
+        return self.service_dir / "docker-compose.yml"
 
     @property
     def prompt_files(self) -> list[Path]:
@@ -124,6 +156,41 @@ def _smoke(table: object, where: str) -> dict[str, AgentSmoke]:
             output=output,
         )
     return result
+
+
+def _services(data: dict, names: tuple[str, ...], path: Path, where: str) -> dict[str, ServiceSpec]:
+    tables = data.get("service", {})
+    if not isinstance(tables, dict):
+        raise ManifestError(f"{where}: `service` must be a table of [service.<name>] tables")
+    if set(tables) != set(names):
+        raise ManifestError(
+            f"{where}: `services` lists {sorted(names)} but [service.*] describes {sorted(tables)}; "
+            "each listed service needs a [service.<name>] table and vice versa"
+        )
+    specs: dict[str, ServiceSpec] = {}
+    for name, table in tables.items():
+        if (
+            not isinstance(table, dict)
+            or set(table) - SERVICE_KEYS
+            or not {"port", "env"} <= set(table)
+        ):
+            raise ManifestError(
+                f"{where}: [service.{name}] needs `port` and `env` (and may set `url`)"
+            )
+        port, env = table["port"], table["env"]
+        if isinstance(port, bool) or not isinstance(port, int) or not 0 < port < 65536:
+            raise ManifestError(f"{where}: [service.{name}] `port` must be a port number")
+        if not isinstance(env, str) or not env.isidentifier():
+            raise ManifestError(
+                f"{where}: [service.{name}] `env` must be an environment variable name"
+            )
+        url = table.get("url", "{address}")
+        if not isinstance(url, str) or "{address}" not in url:
+            raise ManifestError(f"{where}: [service.{name}] `url` must contain {{address}}")
+        specs[name] = ServiceSpec(name, port, env, url)
+    if specs and not (path / "service" / "docker-compose.yml").is_file():
+        raise ManifestError(f"{path}: declares services but has no service/docker-compose.yml")
+    return specs
 
 
 def load(path: Path) -> Example:
@@ -162,7 +229,8 @@ def load(path: Path) -> Example:
         raise ManifestError(f"{where}: `cost_budget_usd` must be a positive number")
 
     dependencies = _string_list(data, "dependencies", where)
-    for requirement in dependencies:
+    test_dependencies = _string_list(data, "test_dependencies", where)
+    for requirement in (*dependencies, *test_dependencies):
         if not REQUIREMENT_RE.match(requirement):
             raise ManifestError(f"{where}: `{requirement}` is not a valid requirement")
 
@@ -181,6 +249,8 @@ def load(path: Path) -> Example:
         dependencies=dependencies,
         env=_string_list(data, "env", where),
         services=_string_list(data, "services", where),
+        service_specs=_services(data, _string_list(data, "services", where), path, where),
+        test_dependencies=test_dependencies,
         templated=data.get("templated", False),
         smoke=smoke,
         expected_tools=_string_list(data, "expected_tools", where),

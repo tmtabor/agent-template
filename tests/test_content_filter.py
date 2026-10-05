@@ -26,7 +26,7 @@ def _filtered(messages, info) -> ModelResponse:
 @pytest.mark.parametrize("example", example_ids())
 async def test_every_agent_in_an_example_raises_on_content_filtered_response(example):
     """Each agent is checked directly — not just the one a flow happens to reach first."""
-    module = import_example(example)
+    module = import_example(example, running=True)
     deps = getattr(module, example.deps)()
     agents = module_agents(module)
     assert agents

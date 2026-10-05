@@ -353,13 +353,6 @@ def test_failing_live_tests_skip_the_smoke_run_and_the_transcript():
     assert runner.stages == ["live_tests"]  # no smoke run, so nothing was recorded
 
 
-def test_an_example_needing_services_is_unverified_and_nothing_runs():
-    runner = FakeRunner()
-    (outcome,) = check([dataclasses.replace(example("router"), services=("temporal",))], runner)
-    assert outcome.status == "unverified" and "temporal" in outcome.error
-    assert runner.calls == []
-
-
 def test_live_tests_run_in_the_isolated_environment_and_append_to_the_coverage_data():
     command = release_check.live_tests_command(with_deps())
     assert command[:6] == ["uv", "run", "--with", "httpx>=0.28", "--with", "rich"]
@@ -398,6 +391,14 @@ def test_a_missing_transcript_fails_the_check_even_if_every_example_passed():
     missing = release_check.Coverage(False, "no transcript", title="Recorded runs:")
     summary = release_check.summarize(outcomes, transcripts=missing)
     assert not summary.ok and "Recorded runs:" in summary.text and "no transcript" in summary.text
+
+
+def test_an_examples_service_code_is_covered_too():
+    command = release_check.coverage_command([example("mcp_tools"), example("router")])
+    assert command[-1] == (
+        "--include=examples/mcp_tools/agent.py,examples/mcp_tools/service/server.py,"
+        "examples/router/agent.py"
+    )
 
 
 def test_the_coverage_report_covers_only_the_examples_that_were_checked():

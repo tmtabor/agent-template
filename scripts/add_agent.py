@@ -72,6 +72,10 @@ def targets(root: Path, name: str, example: Example) -> dict[str, Path]:
         paths[f"prompt:{prompt.name}"] = (
             root / "agent" / "prompts" / prompt_target(prompt.name, example.name, name)
         )
+    if example.service_dir.is_dir():
+        # The example's service (server, Dockerfile, compose file) is a separate deployable, so it
+        # goes beside the project's agents rather than inside agent/.
+        paths["service"] = root / "services" / name
     return paths
 
 
@@ -111,6 +115,20 @@ def rename(text: str, example: Example, name: str) -> str:
     # which is safe because each agent lives in its own module.
     pattern = re.compile(rf'load_prompt\(\s*"{re.escape(example.name)}((?:_\w+)?)"')
     return pattern.sub(lambda m: f'load_prompt("{name}{m.group(1)}"', text)
+
+
+def service_skip(example: Example, name: str) -> str:
+    """Lines that skip a generated test unless the example's services are up (empty if it has none)."""
+    if not example.service_specs:
+        return ""
+    envs = sorted(spec.env for spec in example.service_specs.values())
+    return (
+        "import os\n\nimport pytest\n\n"
+        f"pytestmark = pytest.mark.skipif(\n"
+        f"    not all(os.environ.get(name) for name in {envs!r}),\n"
+        f'    reason="needs the service running: see services/{name}/",\n'
+        ")\n\n"
+    )
 
 
 def smoke_test_source(example: Example, name: str) -> str:
@@ -164,9 +182,21 @@ def smoke_test_source(example: Example, name: str) -> str:
         "tests/conftest.py overrides every Agent under agent.agents with a TestModel, so this\n"
         'runs with no API key and no cost.\n"""\n\n'
         f"{imports}"
-        f"from agent.agents.{name} import {names}\n\n\n"
+        f"from agent.agents.{name} import {names}\n\n"
+        f"{service_skip(example, name)}\n"
         f"async def test_{name}_runs_with_test_model():\n"
         f"{body}{check}"
+    )
+
+
+def eval_service_skip(example: Example, name: str) -> str:
+    """Skip every eval in the module unless the example's services are up (empty if it has none)."""
+    if not example.service_specs:
+        return ""
+    envs = sorted(spec.env for spec in example.service_specs.values())
+    return (
+        f"if not all(os.environ.get(name) for name in {envs!r}):\n"
+        f'    pytest.skip("needs the service running: see services/{name}/", allow_module_level=True)\n'
     )
 
 
@@ -177,11 +207,13 @@ def eval_source(example: Example, name: str) -> str:
         "These make real model calls: run with `uv run pytest -m eval` (needs an API key,\n"
         f"costs money). Grow the dataset by adding cases to evals/fixtures/{name}.json — see\n"
         'evals/helpers.py for the optional keys that add behavioral checks.\n"""\n\n'
+        f"{'import os' + chr(10) if example.service_specs else ''}"
         "import pytest\n\n"
         f"from agent.agents.{name} import {run}\n"
         "from evals.helpers import load_fixtures, output_text, run_fixture_dataset\n"
         "from evals.judge import judge_response\n\n"
-        f"SMOKE_INPUT = {example.smoke_input!r}\n\n\n"
+        f"SMOKE_INPUT = {example.smoke_input!r}\n\n"
+        f"{eval_service_skip(example, name)}\n"
         "@pytest.mark.eval\n"
         f"async def test_{name}_returns_output():\n"
         f"    result = await {run}(SMOKE_INPUT)\n"
@@ -234,7 +266,10 @@ def add(root: Path, example: Example, name: str, *, install: bool = True) -> lis
 
     for key, path in paths.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents[key], encoding="utf-8")
+        if key == "service":
+            shutil.copytree(example.service_dir, path, ignore=shutil.ignore_patterns("__pycache__"))
+        else:
+            path.write_text(contents[key], encoding="utf-8")
 
     written = list(paths.values())
     format_python([p for p in written if p.suffix == ".py"], root)
@@ -396,7 +431,17 @@ def main(argv: list[str] | None = None) -> int:
     if example.env:
         print(f"Set in .env: {', '.join(example.env)}")
     if example.services:
-        print(f"Needs running: {', '.join(example.services)}")
+        compose = f"services/{name}/docker-compose.yml"
+        print(
+            f"Its service ({', '.join(example.services)}) is in services/{name}/. Start it, then tell the agent where it is:"
+        )
+        print(f"    docker compose -f {compose} up -d --wait")
+        for spec in example.service_specs.values():
+            print(
+                f"    docker compose -f {compose} port {spec.name} {spec.port}   # host:port Docker chose"
+            )
+            print(f"    set {spec.env} to {spec.url.replace('{address}', '<that host:port>')}")
+        print()
     print(
         "Next steps:\n"
         f"  1. Edit agent/agents/{name}.py and its prompt(s) in agent/prompts/\n"

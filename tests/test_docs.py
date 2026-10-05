@@ -185,6 +185,14 @@ def test_an_example_page_has_its_readme_recorded_run_and_source(site):
     assert "[`sample_run.md`](#recorded-run)" in page  # the README's link now stays on the page
 
 
+def test_an_example_that_runs_as_a_service_shows_the_service_files(site):
+    page = site["patterns/mcp_tools.md"]
+    for label in ("service/server.py", "service/Dockerfile", "service/docker-compose.yml"):
+        assert f'=== "{label}"' in page
+    assert "```dockerfile" in page and "```yaml" in page
+    assert '=== "service/' not in site["patterns/router.md"]  # only examples that have one
+
+
 def test_an_examples_prompt_files_get_their_own_tabs(site):
     assert '=== "prompts/evaluator_optimizer_critic.txt"' in site["patterns/evaluator_optimizer.md"]
 

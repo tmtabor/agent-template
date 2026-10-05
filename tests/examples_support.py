@@ -1,6 +1,7 @@
 """Shared helpers for tests that run every example in place."""
 
 import importlib
+import os
 import sys
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
@@ -30,8 +31,19 @@ def is_labeled(label: str | None, example_name: str) -> bool:
     return label == example_name or (label or "").startswith(f"{example_name}.")
 
 
-def import_example(example: Example) -> ModuleType:
-    """Import the example's module in place, skipping if its extra dependencies are absent."""
+def import_example(example: Example, *, running: bool = False) -> ModuleType:
+    """Import the example's module in place, skipping if its extra dependencies are absent.
+
+    Pass `running=True` from a test that *runs* the agent: an example that needs a service is then
+    skipped unless the release check has started it and exported its address. Importing alone needs
+    no service, so structural checks leave it False.
+    """
+    if running:
+        unset = [
+            spec.env for spec in example.service_specs.values() if not os.environ.get(spec.env)
+        ]
+        if unset:
+            pytest.skip(f"{example.name} needs its service running ({', '.join(unset)} is not set)")
     try:
         return importlib.import_module(example.module)
     except ImportError as exc:

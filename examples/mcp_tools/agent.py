@@ -1,32 +1,31 @@
-"""MCP tools: give an agent the tools of a Model Context Protocol server.
+"""MCP tools: give an agent the tools of a Model Context Protocol server running as a service.
 
 Use this pattern when:
-- The tools already exist as an MCP server (yours, or someone else's) and you want the agent to use them
-- You want one tool implementation to serve several clients (this agent, an IDE, another app)
+- The tools already exist as an MCP server (yours, or someone else's) and the agent should use them
+- One tool implementation should serve several clients (this agent, an IDE, another application)
 - Tools should be discovered at run time rather than hard-coded into the agent
 
-How it works: the agent gets an `MCP(...)` capability, which connects to a server, lists its tools,
-and exposes them to the model like any other tool. When the model calls one, the call goes over MCP to
-the server and the result comes back. A tool that raises becomes an error the model sees and can
-correct (here, a malformed date).
+How it works: the server is its own process (`service/server.py`, started by Docker Compose). The
+agent connects to it by URL, lists its tools, and exposes them to the model like any other. When the
+model calls one, the call goes over the network to the server and the result comes back. A tool that
+raises becomes an error the model sees and can correct (here, a malformed date).
 
-This example runs a small calendar server **in process** (`MCP(local=server)`), so the whole example
-is one file and needs no subprocess or network. The model still talks to it over real MCP. To use a
-different server, change that one argument: a URL (`MCP("https://…/mcp")`) or a command
-(`MCP(local=StdioTransport(command="uvx", args=["some-mcp-server"]))`). Everything else stays.
+The server's address is a dependency (`McpDeps.server_url`, read from MCP_SERVER_URL), so the same agent
+can talk to the local service, a staging server or a test double. The toolset is built per run from it.
+Pointing at a different MCP server changes nothing else: its tools are discovered, not coded.
 
-Dates are a good fit: models are unreliable at calendar arithmetic, and a tool makes it exact.
+If the server isn't running, `run_mcp` raises `McpServerUnavailable` saying where it looked.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, timedelta
+import os
+from dataclasses import dataclass, field
 
-from fastmcp import FastMCP
 from pydantic import BaseModel
-from pydantic_ai import Agent
-from pydantic_ai.capabilities import MCP, RaiseContentFilterError
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.capabilities import RaiseContentFilterError
+from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
@@ -41,39 +40,12 @@ USAGE_LIMITS = UsageLimits(
     request_limit=12, total_tokens_limit=100_000, cost_limit=settings.cost_limit
 )
 
-
-# --- The MCP server ---
-# In a real system this lives elsewhere (its own process, or a service you don't own). It is
-# defined here so the example is self-contained and its tools can be tested directly.
-server = FastMCP("calendar-tools")
+# Where the service listens when you start it with `docker compose up` (see service/).
+DEFAULT_SERVER_URL = "http://127.0.0.1:8000/mcp"
 
 
-def parse_date(text: str) -> date:
-    """A date from `YYYY-MM-DD`, or a ValueError the model can read and fix."""
-    try:
-        return date.fromisoformat(text.strip())
-    except ValueError:
-        raise ValueError(
-            f"{text!r} is not a date. Use the form YYYY-MM-DD, e.g. 2025-03-01."
-        ) from None
-
-
-@server.tool
-def days_between(start: str, end: str) -> int:
-    """The number of days from `start` to `end`: negative if `end` is earlier. Dates are YYYY-MM-DD."""
-    return (parse_date(end) - parse_date(start)).days
-
-
-@server.tool
-def add_days(start: str, days: int) -> str:
-    """The date `days` days after `start` (before it, if negative), as YYYY-MM-DD."""
-    return (parse_date(start) + timedelta(days=days)).isoformat()
-
-
-@server.tool
-def weekday(day: str) -> str:
-    """The day of the week a date falls on, e.g. "Wednesday". The date is YYYY-MM-DD."""
-    return parse_date(day).strftime("%A")
+def server_url_from_env() -> str:
+    return os.environ.get("MCP_SERVER_URL", DEFAULT_SERVER_URL)
 
 
 # --- Dependencies ---
@@ -81,7 +53,11 @@ def weekday(day: str) -> str:
 class McpDeps:
     """Runtime dependencies for the MCP agent."""
 
-    pass
+    server_url: str = field(default_factory=server_url_from_env)
+
+
+class McpServerUnavailable(Exception):
+    """The MCP server could not be reached."""
 
 
 # --- Output type ---
@@ -97,17 +73,18 @@ mcp_agent: Agent[McpDeps, Answer] = Agent(
     name=LABEL,
     output_type=Answer,
     deps_type=McpDeps,
-    capabilities=[
-        RaiseContentFilterError(),
-        MCP(
-            local=server
-        ),  # connect to the server and expose its tools; swap this for a URL or stdio
-    ],
+    capabilities=[RaiseContentFilterError()],
     instructions=(
         "You answer questions about dates and the calendar. Use the tools for every calculation "
         "and never work out dates yourself. Dates are written YYYY-MM-DD."
     ),
 )
+
+
+@mcp_agent.toolset(per_run_step=False)
+def calendar_tools(ctx: RunContext[McpDeps]) -> MCPToolset:
+    """The MCP server's tools, connected to the address in deps. Built once per run."""
+    return MCPToolset(ctx.deps.server_url)
 
 
 async def run_mcp(user_input: str, deps: McpDeps | None = None) -> RunResult[Answer]:
@@ -116,12 +93,25 @@ async def run_mcp(user_input: str, deps: McpDeps | None = None) -> RunResult[Ans
     Returns:
         A RunResult: `.output` is the `Answer`; the MCP tool calls and results are in
         `.all_messages()`.
+
+    Raises:
+        McpServerUnavailable: When the server can't be reached.
     """
     if deps is None:
         deps = McpDeps()
-    logger.info("Running MCP agent", extra={"user_input": user_input})
+    logger.info("Running MCP agent", extra={"user_input": user_input, "server": deps.server_url})
     flow = Flow(USAGE_LIMITS)
-    result = await flow.run(mcp_agent, user_input, deps=deps)
+    try:
+        result = await flow.run(mcp_agent, user_input, deps=deps)
+    except RuntimeError as exc:
+        # fastmcp reports a refused or unreachable connection as a RuntimeError; anything else is a bug.
+        if "failed to connect" not in str(exc):
+            raise
+        raise McpServerUnavailable(
+            f"No MCP server at {deps.server_url}. Start it with "
+            "`docker compose -f examples/mcp_tools/service/docker-compose.yml up -d --wait`, "
+            "or set MCP_SERVER_URL."
+        ) from exc
     return flow.finish(result.output)
 
 

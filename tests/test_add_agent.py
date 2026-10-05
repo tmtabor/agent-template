@@ -5,6 +5,7 @@ end to end: the copied module imports, its generated smoke test passes under
 TestModel, its eval starter collects, and prompt paths are rewritten correctly.
 """
 
+import dataclasses
 import json
 import os
 import shutil
@@ -71,7 +72,8 @@ def test_the_repo_ships_no_agents():
 
 @pytest.mark.parametrize("ex", example_ids())
 def test_added_agent_runs_and_its_evals_collect(project: Path, ex):
-    import_example(ex)  # skips if the example's declared dependencies aren't in this environment
+    # Skips if the example's dependencies, or a service its generated smoke test would call, are missing.
+    import_example(ex, running=True)
     add_agent.add(project, ex, "my_agent", install=False)
 
     module = project / "agent" / "agents" / "my_agent.py"
@@ -138,7 +140,7 @@ def test_blank_symbols_are_renamed(project: Path):
 def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
     project: Path, monkeypatch
 ):
-    """The first example with a real dependency (mcp_tools) makes this reachable."""
+    """No shipped example needs a runtime dependency now, so one is declared for the test."""
     calls: list[tuple[list[str], Path]] = []
     real_run = subprocess.run
 
@@ -149,8 +151,7 @@ def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
         return real_run(command, *args, **kwargs)  # ruff formatting still runs for real
 
     monkeypatch.setattr(add_agent.subprocess, "run", record)
-    ex = example("mcp_tools")
-    assert ex.dependencies  # the premise of the test
+    ex = dataclasses.replace(example("router"), dependencies=("httpx>=0.28", "rich"))
 
     add_agent.add(project, ex, "calendar", install=False)
     assert calls == []  # --no-install: nothing is installed
@@ -158,8 +159,80 @@ def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
     add_agent.add(project, ex, "calendar_two", install=True)
     assert calls == [(["uv", "add", *ex.dependencies], project)]
 
-    add_agent.add(project, example("router"), "support", install=True)
+    add_agent.add(project, example("single"), "plain", install=True)
     assert len(calls) == 1  # an example with no dependencies runs no `uv add` at all
+
+
+def test_an_example_with_a_service_brings_its_service_along(project: Path):
+    ex = example("mcp_tools")
+    written = add_agent.add(project, ex, "calendar", install=False)
+
+    service = project / "services" / "calendar"
+    assert service in written
+    assert {p.name for p in service.iterdir()} == {"Dockerfile", "docker-compose.yml", "server.py"}
+    assert not list(service.rglob("__pycache__"))  # no build debris
+    assert (service / "server.py").read_text() == (ex.service_dir / "server.py").read_text()
+
+
+def test_an_example_without_a_service_gets_no_services_folder(project: Path):
+    add_agent.add(project, example("router"), "support", install=False)
+    assert not (project / "services").exists()
+
+
+def test_an_existing_service_folder_is_never_overwritten(project: Path):
+    (project / "services" / "calendar").mkdir(parents=True)
+    with pytest.raises(ValueError, match="services/calendar already exists"):
+        add_agent.add(project, example("mcp_tools"), "calendar", install=False)
+
+
+def test_the_generated_tests_skip_unless_the_service_is_running(project: Path):
+    """A copied agent's smoke test and evals need its service; without it they skip, not fail."""
+    add_agent.add(project, example("mcp_tools"), "calendar", install=False)
+    smoke = (project / "tests" / "test_agents_calendar.py").read_text()
+    evals = (project / "evals" / "test_calendar.py").read_text()
+    assert "pytest.mark.skipif" in smoke and "MCP_SERVER_URL" in smoke
+    assert "allow_module_level=True" in evals and "MCP_SERVER_URL" in evals
+
+    env = {**os.environ, "MCP_SERVER_URL": ""}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "tests/test_agents_calendar.py",
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0 and "1 skipped" in result.stdout, result.stdout + result.stderr
+    collected = pytest_in(project, "--collect-only", "-m", "eval", "evals/test_calendar.py")
+    assert collected.returncode in (0, 5), (
+        collected.stdout + collected.stderr
+    )  # skipped module: no error
+
+
+def test_only_runtime_dependencies_are_installed_not_test_dependencies(project: Path, monkeypatch):
+    calls = []
+    real_run = subprocess.run
+    monkeypatch.setattr(
+        add_agent.subprocess,
+        "run",
+        lambda command, *a, **k: (
+            calls.append(list(command)) or subprocess.CompletedProcess(command, 0)
+            if command[:2] == ["uv", "add"]
+            else real_run(command, *a, **k)
+        ),
+    )
+    ex = dataclasses.replace(example("mcp_tools"), dependencies=("httpx>=0.28",))
+    add_agent.add(project, ex, "calendar", install=True)
+    assert calls == [
+        ["uv", "add", "httpx>=0.28"]
+    ]  # the server half is for testing, not for using the agent
 
 
 def test_the_same_example_can_be_added_twice(project: Path):

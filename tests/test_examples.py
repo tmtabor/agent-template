@@ -62,7 +62,7 @@ def test_entrypoint_and_smoke_names_resolve(example):
 @pytest.mark.parametrize("example", example_ids())
 async def test_example_runs_its_whole_flow_with_test_model(example):
     """Drive `run` end to end: every agent in the flow runs, and the RunResult says how."""
-    module = import_example(example)
+    module = import_example(example, running=True)
     run = getattr(module, example.run)
 
     with smoke_overrides(example, module):

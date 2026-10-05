@@ -1,11 +1,23 @@
 title = "MCP tools"
 pattern = "mcp_tools"
-summary = "Give an agent the tools of a Model Context Protocol server: discovered at run time, called over MCP, with server errors the model can correct."
+summary = "Give an agent the tools of a Model Context Protocol server running as its own service: discovered at run time, called over the network, with server errors the model can correct."
 smoke_input = "How many days are there from 2024-02-10 to 2024-03-01?"
 # A real model must use the server's tool rather than count the days itself (checked by the release check).
 expected_tools = ["days_between"]
-# The in-process MCP server needs fastmcp's server side, which Pydantic AI's MCP client does not pull in.
-dependencies = ["fastmcp-slim[server]>=4.0,<5"]
+
+# The agent is only a client and needs nothing beyond the template. The tests start the server
+# locally, which needs fastmcp's server half; that is not part of using the agent, so add_agent.py
+# does not install it into your project.
+test_dependencies = ["fastmcp-slim[server]>=4.0,<5"]
+
+# The server runs as a docker-compose service (service/). The release check starts it, finds the
+# port Docker chose, and passes the address to the example in MCP_SERVER_URL.
+services = ["mcp-server"]
+
+[service.mcp-server]
+port = 8000
+env = "MCP_SERVER_URL"
+url = "http://{address}/mcp"
 
 [entrypoint]
 deps = "McpDeps"

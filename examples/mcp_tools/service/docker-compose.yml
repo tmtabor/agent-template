@@ -1,0 +1,16 @@
+# The calendar MCP server, as a service. Start it by hand with:
+#     docker compose up -d --wait
+# scripts/release_check.py starts and stops it for you when it checks the example.
+services:
+  mcp-server:
+    build: .
+    ports:
+      # Publish on 127.0.0.1 only, on a free host port (the first field is left empty so Docker
+      # picks one); `docker compose port mcp-server 8000` says which.
+      - "127.0.0.1::8000"
+    healthcheck:
+      # Healthy once the server accepts connections, so `up --wait` returns when it is ready.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2).close()"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

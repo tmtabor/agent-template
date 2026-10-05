@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import importlib
 import json
+import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -80,13 +81,21 @@ async def record_one(example: Example, run, model: str, *, write: bool = True) -
     return outcome
 
 
-def unverified(example: Example, model: str) -> Outcome:
+def unverified(example: Example, model: str, reason: str | None = None) -> Outcome:
+    """An example that could not be checked, and why: never counted as passed."""
     return Outcome(
         example.name,
         "unverified",
         model=model,
-        error=f"needs services that are not started here: {', '.join(example.services)}",
+        error=reason
+        or f"needs its services running ({', '.join(example.services)}); "
+        "scripts/release_check.py starts them with Docker",
     )
+
+
+def services_are_running(example: Example) -> bool:
+    """Whether the release check has started this example's services and told us where they are."""
+    return all(os.environ.get(spec.env) for spec in example.service_specs.values())
 
 
 async def record_all(examples: list[Example], model: str, *, write: bool) -> list[Outcome]:
@@ -94,7 +103,7 @@ async def record_all(examples: list[Example], model: str, *, write: bool) -> lis
     the loop that first uses them, so one loop for all of them)."""
     outcomes = []
     for example in examples:
-        if example.services:
+        if not services_are_running(example):
             outcomes.append(unverified(example, model))
             continue
         try:

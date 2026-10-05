@@ -53,8 +53,17 @@ have cloned the template: what changed, and whether you need to do anything.
   approver you plug in, and a ledger checked against what the model claims), `conversation`
   (message history, a turn-based window, streaming), `guardrails` (a PII check in code, an LLM
   topic guard, an output validator, provider filters and budget limits turned into safe answers)
-  and `mcp_tools` (an MCP server's tools over the `MCP` capability; the first example with a
-  dependency of its own, `fastmcp-slim[server]`, which `add_agent.py` installs with `uv add`).
+  and `mcp_tools` (the tools of an MCP server that runs as its own Docker service, reached over
+  HTTP, with the address in deps and a clear error when the server is down).
+- **Services.** An example can declare a service it needs running: `services = [...]` plus a
+  `[service.<name>]` table in `example.toml` (the container port, the environment variable that
+  receives its address, and a URL template), and `service/docker-compose.yml`. The release check
+  (`scripts/services.py`) builds and starts it with `docker compose up --build --wait`, finds the
+  port Docker chose, passes the address to the example's tests, and always tears it down. If Docker
+  isn't available the example is reported *unverified* with the reason (and fails the check unless
+  `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
+  need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
+  `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
 - `run_*` helpers may resume a run with no new prompt: `Flow.run` accepts `prompt=None` with
   `message_history=` and `deferred_tool_results=`.
 - The release gate runs a dependency-bearing example's generic tests (and its copy-into-a-project

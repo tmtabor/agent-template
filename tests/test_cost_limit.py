@@ -36,7 +36,7 @@ def test_example_limits_follow_the_setting(example):
 
 @pytest.mark.parametrize("example", example_ids())
 async def test_no_cost_warning_when_no_cost_limit_is_set(example):
-    module = import_example(example)
+    module = import_example(example, running=True)
     if settings.cost_limit is not None:
         pytest.skip("AGENT_COST_LIMIT is set in this environment")
 
@@ -48,7 +48,7 @@ async def test_no_cost_warning_when_no_cost_limit_is_set(example):
 
 @pytest.mark.parametrize("example", example_ids())
 async def test_cost_limit_is_enforced_when_set(example):
-    module = import_example(example)
+    module = import_example(example, running=True)
     limits = dataclasses.replace(module.USAGE_LIMITS, cost_limit=Decimal("0.50"))
     deps = getattr(module, example.deps)()
 
