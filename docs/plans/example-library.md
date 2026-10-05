@@ -1,7 +1,7 @@
 # Example agent library — plan
 
-Status: steps 1-3 implemented; step 4 built and tested, with the committed transcripts waiting on a
-provider key; steps 5-7 pending. Date: 2026-10-05.
+Status: steps 1-4 implemented; step 5 (docs site) built, awaiting the one-time Pages setting;
+steps 6-7 pending. Date: 2026-10-05.
 
 ## Goals
 
@@ -363,6 +363,44 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
   documented workflow; covered by the changelog entry.
 - Copying an example under a new name must rewrite its prompt paths correctly;
   the temp-repo test of `add_agent.py` guards this.
+
+## Implementation notes (step 5, as built)
+
+- **Generated, not written.** `docs/gen_pages.py` (run by `mkdocs-gen-files`) builds every page
+  from the repo's own files: the README split by its `##` sections (a missing section raises
+  `SectionNotFound` naming what exists), `AGENTS.md` as "Design notes", `CHANGELOG.md`, and for
+  each example its README, `sample_run.md` (nested under "Recorded run") and its source in
+  Material content tabs (`agent.py`, each prompt, `example.toml`, `test_example.py`,
+  `test_live.py`). Relative links are rewritten to site pages where one exists and to GitHub
+  otherwise; code fences are never touched.
+- **The nav is set by the generator** (`mkdocs_gen_files.config["nav"]`), from the examples that
+  exist, so a new example needs no edit to `mkdocs.yml`. A `SUMMARY.md` + `literate-nav` approach
+  was tried first and dropped: the nav file is added after `exclude_docs` runs, so it was published
+  as a stray page. Examples are listed in `DISPLAY_ORDER` (`scripts/example_manifest.py`); an
+  unlisted one is appended alphabetically.
+- **`examples/README.md`** is a generated index (`scripts/examples_index.py`), so the examples
+  are browsable on GitHub too; a test fails if it is stale.
+- **Pages workflow** (`.github/workflows/docs.yml`): builds with `uv run --only-group docs mkdocs
+  build --strict` (verified in an isolated docs-only environment) and deploys with the official
+  Pages actions on pushes to `main` that touch the docs sources. It needs Settings → Pages →
+  Source: "GitHub Actions", set once by hand. Unlike the release gate it spends nothing and needs
+  no secrets, so it is a workflow.
+- **`tests/test_docs.py`**: the generator's pure functions, that every page is in the nav and
+  every internal link resolves, that `mkdocs.yml`'s URLs match the scripts', that the examples
+  index is current, and a real `mkdocs build --strict` when MkDocs is installed.
+- **MkDocs is pinned `<2`.** Material's own build banner warns that MkDocs 2.0 will break
+  plugins and themes; `properdocs`, a continuation of 1.x that Material already installs, is the
+  drop-in if 1.x is ever abandoned.
+- **`--prune`** now also removes the docs, `examples/README.md`, `scripts/examples_index.py`,
+  `tests/test_docs.py` and the `docs` dependency group from `pyproject.toml` (and relocks) —
+  the part of step 1's prune that had been deferred.
+- **Verified:** strict build clean in the full and the docs-only environments, every page serves,
+  and the pages were looked at in a browser (home, getting started, agents, design notes, and
+  pattern pages with their recorded runs and source tabs). Looking found a bug the build could
+  not: GitHub renders a list straight after a `**bold**` line, but MkDocs runs its items into one
+  paragraph, and the example READMEs and transcripts are written GitHub-style. The generator now
+  puts a blank line before every such list (fence-aware, idempotent, tested on every generated
+  page). Not checked: dark mode, narrow/mobile layout.
 
 ## Implementation notes (step 4, as built)
 
