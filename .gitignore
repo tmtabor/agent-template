@@ -12,3 +12,4 @@ logfire_credentials.json
 .claude/settings.local.json
 .idea/
 .coverage
+site/

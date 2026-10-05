@@ -47,6 +47,12 @@ have cloned the template: what changed, and whether you need to do anything.
   cap). Each has its own `test_example.py` covering its orchestration.
 - `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
   gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
+- A documentation site (MkDocs Material, published to GitHub Pages by a `Docs` workflow),
+  generated entirely from the README, `AGENTS.md`, `CHANGELOG.md` and the examples by
+  `docs/gen_pages.py`: nothing is written twice, and every pattern gets a page with its README,
+  recorded run and source. Preview it with `uv run --group docs mkdocs serve`. `examples/README.md`
+  is a generated, browsable index of the examples (`scripts/examples_index.py`). Enable it once in
+  Settings → Pages → Source: "GitHub Actions". A new `docs` dependency group holds the tooling.
 - `scripts/release_check.py`, the live pre-release gate: the offline suite under coverage, then
   each example in its own `uv run` environment under a spend cap — its real-model live tests
   (`examples/<name>/test_live.py`, which also require that every agent the example defines ran),

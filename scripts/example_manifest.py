@@ -188,6 +188,28 @@ def load(path: Path) -> Example:
     )
 
 
+# How examples are listed in the docs and the examples index: single agents first, then the
+# multi-agent patterns, simplest to most involved. A new example not named here is appended
+# alphabetically, so adding one never breaks anything; add it here to place it deliberately.
+DISPLAY_ORDER = [
+    "blank",
+    "single",
+    "tool_calling",
+    "extraction",
+    "supervisor",
+    "router",
+    "pipeline",
+    "fan_out",
+    "evaluator_optimizer",
+]
+
+
+def display_order(examples: list[Example]) -> list[Example]:
+    """`examples` in DISPLAY_ORDER, with any unlisted ones after, alphabetically."""
+    rank = {name: i for i, name in enumerate(DISPLAY_ORDER)}
+    return sorted(examples, key=lambda e: (rank.get(e.name, len(rank)), e.name))
+
+
 def discover(root: Path = EXAMPLES_DIR) -> list[Example]:
     """Every example under `root`, sorted by name. Raises ManifestError on a bad one."""
     if not root.is_dir():

@@ -19,6 +19,11 @@ dev = [
     "ruff>=0.16.10",
     "coverage>=7.16.2",
 ]
+docs = [
+    "mkdocs>=1.6,<2",
+    "mkdocs-gen-files>=0.6.1",
+    "mkdocs-material>=9.7.7",
+]
 
 [tool.pytest.ini_options]
 # scripts/ is not a package; this puts its modules (example_manifest, add_agent) on the path.

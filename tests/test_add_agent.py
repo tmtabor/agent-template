@@ -156,12 +156,28 @@ def test_invalid_names_are_rejected(project: Path, name: str):
 
 def test_prune_keeps_blank_and_the_scripts(project: Path):
     (project / "mkdocs.yml").write_text("site_name: x\n")
+    (project / "tests" / "test_docs.py").write_text("")
     (project / "scripts" / "release_check.py").write_text("")
     add_agent.prune(project)
     assert not (project / "scripts" / "release_check.py").exists()
     assert (project / "scripts" / "add_agent.py").exists()
     assert sorted(p.name for p in (project / "examples").iterdir() if p.is_dir()) == ["blank"]
     assert not (project / "mkdocs.yml").exists()
+    assert not (project / "tests" / "test_docs.py").exists()
+    assert not (project / "examples" / "README.md").exists()  # the generated index would be stale
+    assert not (project / "scripts" / "examples_index.py").exists()
+    # The docs dependency group goes with the docs; the dev group stays.
+    pyproject = (project / "pyproject.toml").read_text()
+    assert "mkdocs" not in pyproject and "dev = [" in pyproject
     # Agents can still be added after pruning.
     add_agent.add(project, example("blank"), "newsletter", install=False)
     assert (project / "agent" / "agents" / "newsletter.py").is_file()
+
+
+def test_removing_a_dependency_group_leaves_the_others_untouched():
+    text = (REPO_ROOT / "pyproject.toml").read_text()
+    assert "docs = [" in text  # the repo has one to remove
+    edited = add_agent.remove_dependency_group(text, "docs")
+    assert "docs = [" not in edited and "mkdocs" not in edited
+    assert "dev = [" in edited and "pytest>=" in edited and "[tool.pytest.ini_options]" in edited
+    assert add_agent.remove_dependency_group(edited, "docs") == edited  # idempotent

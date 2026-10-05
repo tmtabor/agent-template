@@ -34,9 +34,14 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 # `--prune` keeps the blank example (and the scripts) so agents can still be added.
 PRUNE_KEEP = {"blank"}
 PRUNE_PATHS = [
+    # The docs site: generated from the repo's files, so it goes when the examples do.
     "docs",
+    "site",
     "mkdocs.yml",
     ".github/workflows/docs.yml",
+    "examples/README.md",  # the generated index of the examples
+    "scripts/examples_index.py",
+    "tests/test_docs.py",
     # Maintainer tooling for the example library: the live release gate and its tests.
     "scripts/release_check.py",
     "scripts/record_example.py",
@@ -269,9 +274,28 @@ def prune_targets(root: Path) -> list[Path]:
     return found
 
 
-def prune(root: Path) -> None:
+def remove_dependency_group(pyproject: str, group: str) -> str:
+    """`pyproject` without its `[dependency-groups]` entry named `group` (a no-op if absent)."""
+    return re.sub(rf"^{re.escape(group)} = \[\n(?:.*\n)*?\]\n", "", pyproject, flags=re.MULTILINE)
+
+
+def prune(root: Path, *, relock: bool = False) -> None:
+    """Delete the example library's scaffolding, keeping `blank` so agents can still be added.
+
+    Also drops the `docs` dependency group from pyproject.toml (nothing left uses it) and, with
+    `relock`, refreshes uv.lock to match.
+    """
     for path in prune_targets(root):
         shutil.rmtree(path) if path.is_dir() else path.unlink()
+
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        text = pyproject.read_text(encoding="utf-8")
+        edited = remove_dependency_group(text, "docs")
+        if edited != text:
+            pyproject.write_text(edited, encoding="utf-8")
+            if relock:
+                subprocess.run(["uv", "lock", "--quiet"], cwd=root, check=False)
 
 
 # --- CLI ----------------------------------------------------------------------------
@@ -322,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             if input("Delete these? [y/N] ").strip().lower() != "y":
                 print("Aborted.")
                 return 1
-        prune(REPO_ROOT)
+        prune(REPO_ROOT, relock=True)
         print("Pruned. `blank` is kept so you can still add agents.")
         return 0
 

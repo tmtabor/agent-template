@@ -2,6 +2,8 @@
 
 Opinionated general-purpose AI agent template. Clone and start building.
 
+**[Read the documentation](https://tmtabor.github.io/agent-template/)** · **[Browse the example patterns](examples/)** — each with its source, tests and a recorded run against a real model.
+
 ## Stack
 - Python 3.13, uv
 - Pydantic AI v2 (agents, tools) + pydantic-evals (evals)
@@ -50,12 +52,14 @@ agent/
     ├── <name>.txt       # One prompt per agent, written by add_agent.py
     └── templates.py      # load_prompt() loader
 
-examples/               # The pattern library: blank, single, supervisor, tool_calling, …
-└── <pattern>/           #   agent.py, prompts/, example.toml, README.md
+examples/               # The pattern library: blank, single, supervisor, tool_calling, … (see its README)
+└── <pattern>/           #   agent.py, prompts/, example.toml, README.md, sample_run.md, tests
 scripts/add_agent.py     # Add an agent from an example pattern — see "Agents" below
 tests/    # Unit tests against TestModel — no API calls, no API key needed
 evals/    # Per-agent eval starters + shared helpers — real API calls, run with -m eval
+docs/ + mkdocs.yml          # The documentation site, generated from this README and examples/
 .github/workflows/ci.yml    # CI: ruff check, format check, unit tests (no secrets needed)
+.github/workflows/docs.yml  # Builds the docs site and publishes it to GitHub Pages
 ```
 
 ## Configuration
@@ -216,6 +220,23 @@ It checks whichever model `AGENT_MODEL` names, so reconfigure `.env` as you like
 to handle tool calls and structured output; a model that can't will fail the gate). It takes a few
 minutes and costs well under a dollar on a small model. See "Releasing" in
 `AGENTS.md` for the details; `add_agent.py --prune` removes this tooling from your own project.
+
+## Documentation site (maintainers)
+
+The documentation site is generated from this README, `AGENTS.md`, `CHANGELOG.md` and the
+`examples/` folders by `docs/gen_pages.py`. There are no hand-written pages to keep in sync, so to
+change the docs, change those files; a new example appears in the site, and its navigation,
+automatically.
+
+```bash
+uv run --group docs mkdocs serve           # preview at http://127.0.0.1:8000
+uv run --group docs mkdocs build --strict  # what the workflow runs; fails on any broken link
+uv run python scripts/examples_index.py    # regenerate examples/README.md after editing a manifest
+```
+
+The `Docs` workflow publishes the site to GitHub Pages on every push to `main` that touches the
+docs sources. One-time setup: in the repository's Settings → Pages, set "Source" to "GitHub
+Actions". `add_agent.py --prune` removes all of this from your own project.
 
 ## License
 

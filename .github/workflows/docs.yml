@@ -1,0 +1,69 @@
+name: Docs
+
+# Builds the documentation site (generated from the README, AGENTS.md, CHANGELOG.md and the
+# examples by docs/gen_pages.py) and publishes it to GitHub Pages. One-time setup: in the
+# repository's Settings → Pages, set "Source" to "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - "examples/**"
+      - "scripts/example_manifest.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Least privilege — building only reads the repo; the deploy job gets its own Pages permissions.
+permissions:
+  contents: read
+
+# One publish at a time, and never cancel one halfway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # --strict makes any broken link or missing page fail the build instead of shipping.
+      # Only the docs group is installed: the generator needs no agent dependencies.
+      - name: Build the site
+        env:
+          DISABLE_MKDOCS_2_WARNING: "true"
+        run: uv run --only-group docs mkdocs build --strict
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
