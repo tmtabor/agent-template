@@ -46,10 +46,11 @@ def _preimport_agent_modules() -> None:
             continue
         try:
             importlib.import_module(f"examples.{module_info.name}.agent")
-        except ModuleNotFoundError as exc:
+        except ImportError as exc:
             if exc.name and exc.name.split(".")[0] in {"examples", "agent"}:
                 raise
-            # A third-party dependency this example declares but the root env lacks.
+            # A third-party dependency this example declares but the root env lacks (some
+            # packages raise a plain ImportError, not ModuleNotFoundError, when an extra is absent).
 
 
 @pytest.fixture(scope="session", autouse=True)

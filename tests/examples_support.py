@@ -34,10 +34,14 @@ def import_example(example: Example) -> ModuleType:
     """Import the example's module in place, skipping if its extra dependencies are absent."""
     try:
         return importlib.import_module(example.module)
-    except ModuleNotFoundError as exc:
-        if exc.name and exc.name.split(".")[0] in {"examples", "agent"}:
-            raise
-        pytest.skip(f"{example.name} needs {exc.name!r} (run it in its own environment)")
+    except ImportError as exc:
+        # A package the example declares in `dependencies` is missing from this environment (it
+        # runs in its own isolated one). An import failure in the repo's own code is a real error,
+        # and so is any failure in an example that declares no dependencies.
+        name = (getattr(exc, "name", None) or "").split(".")[0]
+        if example.dependencies and name not in {"examples", "agent"}:
+            pytest.skip(f"{example.name} needs its declared dependencies: {exc}")
+        raise
 
 
 @contextmanager

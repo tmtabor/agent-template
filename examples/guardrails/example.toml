@@ -1,0 +1,13 @@
+title = "Guardrails"
+pattern = "guardrails"
+summary = "Check input in code and with a small guard model, validate output, and turn provider filters and budget limits into safe answers."
+smoke_input = "How long should I boil an egg for a runny yolk?"
+
+# TestModel's generated verdict is allowed=false, which would stop every smoke run at the guard; the
+# smoke tests let the request through so both agents run.
+[smoke.topic_guard_agent]
+output = { allowed = true, reason = "That is a cooking question." }
+
+[entrypoint]
+deps = "GuardDeps"
+run = "run_guarded"

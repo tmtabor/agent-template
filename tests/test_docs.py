@@ -189,6 +189,25 @@ def test_an_examples_prompt_files_get_their_own_tabs(site):
     assert '=== "prompts/evaluator_optimizer_critic.txt"' in site["patterns/evaluator_optimizer.md"]
 
 
+def test_an_example_without_a_recording_still_builds_and_drops_the_dead_link(tmp_path, monkeypatch):
+    """A new example has no sample_run.md until the release gate records it; the site must still build."""
+    import dataclasses
+    import shutil
+
+    shutil.copytree(REPO_ROOT / "examples" / "router", tmp_path / "examples" / "router")
+    (tmp_path / "examples" / "router" / "sample_run.md").unlink()
+    monkeypatch.setattr(gen_pages, "REPO_ROOT", tmp_path)
+    example = dataclasses.replace(
+        next(e for e in discover() if e.name == "router"), path=tmp_path / "examples" / "router"
+    )
+
+    page = gen_pages.example_page(example, gen_pages.page_map([example]))
+    assert (
+        "## Recorded run" not in page and "See it run" not in page and "#recorded-run" not in page
+    )
+    assert page.startswith("# Router\n") and '=== "agent.py"' in page  # everything else is there
+
+
 def test_code_containing_backtick_fences_gets_a_longer_fence():
     out = gen_pages.code_tabs([("x.md", "markdown", "```python\nprint(1)\n```")])
     assert "````markdown" in out

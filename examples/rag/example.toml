@@ -1,0 +1,15 @@
+title = "Retrieval (RAG)"
+pattern = "rag"
+summary = "Answer from your own documents with a search tool, and cite only passages the model really retrieved."
+smoke_input = "How long do I have to return a pair of boots?"
+# A real model must search the documents for this (checked by the release check).
+expected_tools = ["search_docs"]
+
+# TestModel's generated junk cites a source nobody retrieved, which the output validator rejects,
+# so the smoke tests supply an answer it accepts.
+[smoke.rag_agent]
+output = { result = "Returns are accepted within 45 days.", sources = [] }
+
+[entrypoint]
+deps = "RagDeps"
+run = "run_rag"

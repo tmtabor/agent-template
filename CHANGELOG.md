@@ -47,6 +47,18 @@ have cloned the template: what changed, and whether you need to do anything.
   cap). Each has its own `test_example.py` covering its orchestration.
 - `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
   gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
+- Five more examples, each verified against a real model: `rag` (retrieval over documents, with
+  citations an output validator checks were really retrieved), `human_in_the_loop` (a tool that
+  pauses for approval, `args_validator` rejecting impossible requests before anyone is asked, an
+  approver you plug in, and a ledger checked against what the model claims), `conversation`
+  (message history, a turn-based window, streaming), `guardrails` (a PII check in code, an LLM
+  topic guard, an output validator, provider filters and budget limits turned into safe answers)
+  and `mcp_tools` (an MCP server's tools over the `MCP` capability; the first example with a
+  dependency of its own, `fastmcp-slim[server]`, which `add_agent.py` installs with `uv add`).
+- `run_*` helpers may resume a run with no new prompt: `Flow.run` accepts `prompt=None` with
+  `message_history=` and `deferred_tool_results=`.
+- The release gate runs a dependency-bearing example's generic tests (and its copy-into-a-project
+  test) in its own environment, and checks transcripts after the live stage rather than before it.
 - A documentation site (MkDocs Material, published to GitHub Pages by a `Docs` workflow),
   generated entirely from the README, `AGENTS.md`, `CHANGELOG.md` and the examples by
   `docs/gen_pages.py`: nothing is written twice, and every pattern gets a page with its README,

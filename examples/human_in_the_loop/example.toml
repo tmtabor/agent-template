@@ -1,0 +1,15 @@
+title = "Human in the loop"
+pattern = "human_in_the_loop"
+summary = "Pause a risky tool call until a person approves it; reject impossible requests before anyone is asked; resume the same run."
+smoke_input = "Order A100 arrived with a broken sole. Please refund the full $84.50."
+# A real model must look the order up for this (checked by the release check).
+expected_tools = ["lookup_order"]
+
+# TestModel's generated output claims refunded=true, which the honesty validator rejects while the
+# ledger is empty, so the smoke tests supply an output that matches it.
+[smoke.refund_agent]
+output = { result = "I could not process that here.", refunded = false }
+
+[entrypoint]
+deps = "RefundDeps"
+run = "run_refunds"

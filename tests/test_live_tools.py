@@ -106,6 +106,36 @@ async def test_a_flow_transcript_has_a_section_per_step():
         assert f"### {index}. `pipeline.{role}`" in text
 
 
+def test_a_run_that_paused_for_approval_is_described_readably_not_as_a_raw_repr():
+    from pydantic_ai import DeferredToolRequests
+    from pydantic_ai.messages import ToolCallPart
+
+    call = ToolCallPart(
+        "issue_refund",
+        {"order_id": "A100", "amount_usd": 84.5},
+        tool_call_id="c1",
+        provider_details={"thought_signature": "x" * 500},  # opaque provider noise
+    )
+    text = live_run.fenced(DeferredToolRequests(approvals=[call]))
+
+    assert "The run paused: waiting for a decision on" in text
+    assert 'approve  issue_refund({"order_id": "A100", "amount_usd": 84.5})' in text
+    assert "thought_signature" not in text and "x" * 50 not in text
+
+
+def test_a_call_waiting_on_an_external_result_is_described_too():
+    from pydantic_ai import DeferredToolRequests
+    from pydantic_ai.messages import ToolCallPart
+
+    text = live_run.fenced(DeferredToolRequests(calls=[ToolCallPart("run_report", {"id": 7})]))
+    assert 'external run_report({"id": 7})' in text
+
+
+def test_other_long_unstructured_output_is_clipped():
+    text = live_run.fenced("y" * 5000)
+    assert len(text) < 2100 and text.startswith("```text")
+
+
 async def test_long_values_are_clipped():
     assert len(live_run.clip("x" * 5000)) < live_run.MAX_FIELD_CHARS + 5
     assert live_run.clip("short") == "short"
@@ -176,8 +206,16 @@ def test_checking_does_not_write_transcripts_unless_recording():
 
 def test_the_offline_command_targets_the_example_in_its_isolated_environment():
     command = release_check.offline_command(with_deps())
-    assert "--with" in command and "-a" in command and command[-1] == "examples/router"
-    assert "eval" not in command  # offline: no real model calls
+    assert "--with" in command and "-a" in command and "eval" not in command  # no real model calls
+    assert "examples/router" in command
+
+
+def test_an_isolated_example_also_runs_the_generic_tests_that_would_skip_it_elsewhere():
+    command = release_check.offline_command(with_deps())
+    for path in release_check.GENERIC_TESTS:
+        assert path in command
+    # Narrowed to this example, and without the transcript check (a new example has none yet).
+    assert command[-2:] == ["-k", f"router and not {release_check.TRANSCRIPT_TEST}"]
 
 
 def test_the_budget_becomes_a_hard_spend_cap():
@@ -332,6 +370,34 @@ def test_live_tests_run_in_the_isolated_environment_and_append_to_the_coverage_d
 def test_the_offline_suite_runs_under_coverage_without_appending():
     command = release_check.offline_suite_command()
     assert command[:5] == ["uv", "run", "coverage", "run", "-m"] and "-a" not in command
+
+
+def test_the_first_stage_skips_the_transcript_check_and_the_last_runs_it():
+    """A new example has no transcript until the gate records it, so checking first would block it."""
+    first = release_check.offline_suite_command()
+    assert first[-2:] == ["-k", f"not {release_check.TRANSCRIPT_TEST}"]
+
+    last = release_check.transcript_command([example("router"), example("pipeline")])
+    assert last[-2:] == ["-k", f"{release_check.TRANSCRIPT_TEST} and (router or pipeline)"]
+    assert "coverage" not in last  # a plain, quick check
+
+
+def test_the_transcript_gate_reports_whether_every_example_has_one():
+    ok = release_check.transcript_gate(
+        [example("router")], runner=lambda c, e: completed("1 passed")
+    )
+    assert ok.ok and ok.report == "all present and current" and "sample_run.md" in ok.title
+    bad = release_check.transcript_gate(
+        [example("router")], runner=lambda c, e: completed("record it: ...", returncode=1)
+    )
+    assert not bad.ok and "record it" in bad.report
+
+
+def test_a_missing_transcript_fails_the_check_even_if_every_example_passed():
+    outcomes = [Outcome("a", "passed", cost=0.0)]
+    missing = release_check.Coverage(False, "no transcript", title="Recorded runs:")
+    summary = release_check.summarize(outcomes, transcripts=missing)
+    assert not summary.ok and "Recorded runs:" in summary.text and "no transcript" in summary.text
 
 
 def test_the_coverage_report_covers_only_the_examples_that_were_checked():

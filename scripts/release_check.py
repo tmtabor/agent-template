@@ -17,7 +17,10 @@ What it does, in order:
      from the example's `cost_budget_usd`.
   3. A coverage gate: every line of every example's `agent.py` must have been executed by the
      offline and live tests together, so no example code goes untested.
-  4. A summary with total tokens and spend. Exits non-zero unless everything passed.
+  4. A transcript check: every checked example has a sample_run.md that matches it. This runs
+     *after* the live stage (and after --record writes them), not with the offline suite, because
+     the transcripts are products of this very gate.
+  5. A summary with total tokens and spend. Exits non-zero unless everything passed.
 
 Makes real model calls: needs the provider key for AGENT_MODEL, and costs money (typically well
 under a dollar for the whole library on the default model). An example that needs `services`
@@ -50,17 +53,55 @@ def uv_run(example: Example | None, *args: str) -> list[str]:
     return [*command, *args]
 
 
+TRANSCRIPT_TEST = "recorded_sample_run"  # tests/test_examples.py: every example has a transcript
+
+
 def offline_suite_command() -> list[str]:
-    """The whole offline suite, under coverage (the data file the live runs then append to)."""
-    return uv_run(None, "coverage", "run", "-m", "pytest", "-q", "-p", "no:cacheprovider")
+    """The whole offline suite, under coverage (the data file the live runs then append to).
+
+    It leaves out the check that transcripts exist: a new example has none until this gate records
+    it, so that check runs afterwards (see transcript_command), when `--record` has written them.
+    """
+    return uv_run(
+        None,
+        *["coverage", "run", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+        *["-k", f"not {TRANSCRIPT_TEST}"],
+    )
+
+
+def transcript_command(examples: list[Example]) -> list[str]:
+    """Check that each example has a sample_run.md matching its current smoke input."""
+    names = " or ".join(e.name for e in examples)
+    return uv_run(
+        None,
+        *["pytest", "-q", "-p", "no:cacheprovider", "tests/test_examples.py"],
+        *["-k", f"{TRANSCRIPT_TEST} and ({names})"],
+    )
+
+
+GENERIC_TESTS = (
+    "tests/test_examples.py",
+    "tests/test_content_filter.py",
+    "tests/test_cost_limit.py",
+    "tests/test_add_agent.py",  # copies the example into a scratch project and tests the copy
+)
 
 
 def offline_command(example: Example) -> list[str]:
-    """One example's offline tests, in its isolated environment, appended to the coverage data."""
+    """One example's offline tests, in its isolated environment, appended to the coverage data.
+
+    Includes the generic tests that run every example (smoke flow, labels, content filter, cost
+    limits), narrowed to this one by `-k`. In the default environment those tests skip an example
+    whose dependencies are missing, so without this they would never run for it at all. Like the
+    first stage it leaves out the transcript check, which runs once the example has been recorded.
+    """
     return uv_run(
         example,
         *["coverage", "run", "-a", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
         f"examples/{example.name}",
+        *GENERIC_TESTS,
+        "-k",
+        f"{example.name} and not {TRANSCRIPT_TEST}",
     )
 
 
@@ -119,14 +160,20 @@ class Summary:
 
 @dataclass
 class Coverage:
-    """The coverage gate: did every line of the checked examples' source run?"""
+    """A gate over the whole run with a report to show: coverage of the examples' source, or that
+    each example's transcript exists."""
 
     ok: bool
     report: str
+    title: str = "Coverage of the examples' source:"
 
 
 def summarize(
-    outcomes: list[Outcome], *, allow_unverified: bool = False, coverage: Coverage | None = None
+    outcomes: list[Outcome],
+    *,
+    allow_unverified: bool = False,
+    coverage: Coverage | None = None,
+    transcripts: Coverage | None = None,
 ) -> Summary:
     lines = [describe(o) for o in outcomes]
     spent = sum(o.cost for o in outcomes if o.cost is not None)
@@ -140,9 +187,10 @@ def summarize(
         + (f" (no price for: {', '.join(unpriced)})" if unpriced else ""),
     ]
     ok = counts["failed"] == 0 and (counts["unverified"] == 0 or allow_unverified)
-    if coverage is not None:
-        lines += ["", "Coverage of the examples' source:", coverage.report.strip()]
-        ok = ok and coverage.ok
+    for gate in (coverage, transcripts):
+        if gate is not None:
+            lines += ["", gate.title, gate.report.strip()]
+            ok = ok and gate.ok
     return Summary("\n".join(lines), ok)
 
 
@@ -188,6 +236,18 @@ def check_examples(
         outcome.model = outcome.model or model
         outcomes.append(outcome)
     return outcomes
+
+
+def transcript_gate(
+    examples: list[Example], runner: Runner = run_process, env: dict[str, str] | None = None
+) -> Coverage:
+    """Fail unless every checked example has a transcript that matches it."""
+    run = runner(transcript_command(examples), dict(os.environ if env is None else env))
+    return Coverage(
+        run.returncode == 0,
+        "all present and current" if run.returncode == 0 else (run.stdout or run.stderr)[-1500:],
+        title="Recorded runs (sample_run.md):",
+    )
 
 
 def coverage_gate(
@@ -249,7 +309,11 @@ def main(argv: list[str] | None = None) -> int:
     outcomes = check_examples(selected, record=args.record, model=settings.model)
     # Coverage is only meaningful if the offline suite ran under it, so --skip-tests skips it.
     coverage = coverage_gate(selected) if measuring else None
-    summary = summarize(outcomes, allow_unverified=args.allow_unverified, coverage=coverage)
+    # After the live stage, which (with --record) is what writes them.
+    transcripts = transcript_gate([e for e in selected if not e.services])
+    summary = summarize(
+        outcomes, allow_unverified=args.allow_unverified, coverage=coverage, transcripts=transcripts
+    )
     print("\n" + summary.text)
     return 0 if summary.ok else 1
 

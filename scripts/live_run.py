@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel
+from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
@@ -151,10 +152,22 @@ def quote(text: str) -> str:
     return "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
 
 
+def describe_pause(requests: DeferredToolRequests) -> str:
+    """A readable account of a run that stopped to wait: which tool calls need a decision."""
+    lines = ["The run paused: waiting for a decision on"]
+    for call in requests.approvals:
+        lines.append(f"  approve  {call.tool_name}({clip(as_text(call.args_as_dict()), 200)})")
+    for call in requests.calls:
+        lines.append(f"  external {call.tool_name}({clip(as_text(call.args_as_dict()), 200)})")
+    return "\n".join(lines)
+
+
 def fenced(output: Any) -> str:
     if isinstance(output, BaseModel):
         return f"```json\n{output.model_dump_json(indent=2)}\n```"
-    return f"```text\n{output}\n```"
+    if isinstance(output, DeferredToolRequests):
+        return f"```text\n{describe_pause(output)}\n```"
+    return f"```text\n{clip(str(output), 2000)}\n```"
 
 
 def money(cost: Decimal | None) -> str:

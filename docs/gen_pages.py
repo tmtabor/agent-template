@@ -101,6 +101,7 @@ def section(sections: dict[str, str], title: str) -> str:
         ) from None
 
 
+SEE_IT_RUN = re.compile(r"^\*\*See it run:\*\*[^\n]*\n+", re.MULTILINE)
 LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
 
 
@@ -199,9 +200,12 @@ def example_page(example: Example, pages: dict[str, str]) -> str:
     """The pattern page for one example: its README, a recorded run, and its source."""
     page = f"patterns/{example.name}.md"
     directory = f"examples/{example.name}"
-    readme = rewrite_links(
-        drop_title(read(f"{directory}/README.md")), f"{directory}/README.md", page, pages
-    )
+    readme_text = drop_title(read(f"{directory}/README.md"))
+    if not (example.path / "sample_run.md").exists():
+        # Nothing to link to yet: a new example is recorded by scripts/release_check.py --record,
+        # and the site must build in the meantime (a link to a missing anchor fails --strict).
+        readme_text = SEE_IT_RUN.sub("", readme_text)
+    readme = rewrite_links(readme_text, f"{directory}/README.md", page, pages)
 
     parts = [f"# {example.title}", "", readme, ""]
 

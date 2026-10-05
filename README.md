@@ -103,6 +103,11 @@ its prompt, a README and an `example.toml`:
 | `supervisor` | A supervisor delegates to specialized workers |
 | `tool_calling` | An agent whose tools call external systems |
 | `extraction` | Free text to a validated schema, with an output validator and retry budget |
+| `rag` | Answer from your own documents with a search tool, and cite only what was really retrieved |
+| `mcp_tools` | Use the tools of an MCP server, discovered at run time (needs `fastmcp-slim[server]`) |
+| `conversation` | Memory across turns, a bounded context window, and streaming |
+| `human_in_the_loop` | Pause a risky tool call for approval, reject impossible ones first, resume the run |
+| `guardrails` | Check input in code and with a guard model, validate output, turn failures into safe answers |
 | `router` | A classifier picks a category; code dispatches to a specialist |
 | `pipeline` | Fixed sequential steps, each output feeding the next, with gates |
 | `fan_out` | Parallel workers via `asyncio.gather`, then an aggregator |
@@ -116,8 +121,8 @@ For each agent, `add_agent.py`:
 - scaffolds a smoke test, `tests/test_agents_<name>.py` (runs under `TestModel`, no API key),
 - scaffolds an eval starter, `evals/test_<name>.py`, with a fixture file at
   `evals/fixtures/<name>.json`,
-- runs `uv add` for any extra dependencies the example declares, and tells you about any
-  environment variables or services it needs.
+- runs `uv add` for any extra dependencies the example declares (`mcp_tools` needs
+  `fastmcp-slim[server]`), and tells you about any environment variables or services it needs.
 
 There is no shared "primary" agent. Import each agent directly from its own module. Every
 `run_*` helper returns the same thing, a `RunResult` (`agent/runs.py`):

@@ -69,9 +69,14 @@ class Flow:
         self.steps: list[Step] = []
 
     async def run[DepsT, OutT](
-        self, agent: Agent[DepsT, OutT], prompt: str, *, deps: DepsT, **kwargs: Any
+        self, agent: Agent[DepsT, OutT], prompt: str | None, *, deps: DepsT, **kwargs: Any
     ) -> AgentRunResult[OutT]:
-        """Run `agent` on `prompt` within this flow's budget and record the step."""
+        """Run `agent` on `prompt` within this flow's budget and record the step.
+
+        `prompt` may be None when resuming a run from message history (for example after a human
+        approved a deferred tool call). Extra keyword arguments (`message_history=`,
+        `deferred_tool_results=`, …) go to `Agent.run`.
+        """
         result = await agent.run(
             prompt, deps=deps, usage=self.usage, usage_limits=self.limits, **kwargs
         )

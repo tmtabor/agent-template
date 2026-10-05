@@ -1,0 +1,12 @@
+title = "MCP tools"
+pattern = "mcp_tools"
+summary = "Give an agent the tools of a Model Context Protocol server: discovered at run time, called over MCP, with server errors the model can correct."
+smoke_input = "How many days are there from 2024-02-10 to 2024-03-01?"
+# A real model must use the server's tool rather than count the days itself (checked by the release check).
+expected_tools = ["days_between"]
+# The in-process MCP server needs fastmcp's server side, which Pydantic AI's MCP client does not pull in.
+dependencies = ["fastmcp-slim[server]>=4.0,<5"]
+
+[entrypoint]
+deps = "McpDeps"
+run = "run_mcp"

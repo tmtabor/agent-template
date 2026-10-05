@@ -16,7 +16,7 @@ import pytest
 
 import add_agent
 from example_manifest import REPO_ROOT, discover
-from tests.examples_support import example_ids
+from tests.examples_support import example_ids, import_example
 
 COPIED = ("agent", "examples", "evals", "scripts")
 
@@ -71,8 +71,7 @@ def test_the_repo_ships_no_agents():
 
 @pytest.mark.parametrize("ex", example_ids())
 def test_added_agent_runs_and_its_evals_collect(project: Path, ex):
-    if ex.dependencies:
-        pytest.skip("needs its own environment")
+    import_example(ex)  # skips if the example's declared dependencies aren't in this environment
     add_agent.add(project, ex, "my_agent", install=False)
 
     module = project / "agent" / "agents" / "my_agent.py"
@@ -134,6 +133,33 @@ def test_blank_symbols_are_renamed(project: Path):
     assert "blank" not in source.lower()
     assert 'load_prompt("newsletter")' in source
     assert "newsletter agent" in (project / "agent" / "prompts" / "newsletter.txt").read_text()
+
+
+def test_an_examples_dependencies_are_installed_with_uv_add_and_only_when_asked(
+    project: Path, monkeypatch
+):
+    """The first example with a real dependency (mcp_tools) makes this reachable."""
+    calls: list[tuple[list[str], Path]] = []
+    real_run = subprocess.run
+
+    def record(command, *args, **kwargs):
+        if command[:2] == ["uv", "add"]:
+            calls.append((list(command), kwargs.get("cwd")))
+            return subprocess.CompletedProcess(command, 0)
+        return real_run(command, *args, **kwargs)  # ruff formatting still runs for real
+
+    monkeypatch.setattr(add_agent.subprocess, "run", record)
+    ex = example("mcp_tools")
+    assert ex.dependencies  # the premise of the test
+
+    add_agent.add(project, ex, "calendar", install=False)
+    assert calls == []  # --no-install: nothing is installed
+
+    add_agent.add(project, ex, "calendar_two", install=True)
+    assert calls == [(["uv", "add", *ex.dependencies], project)]
+
+    add_agent.add(project, example("router"), "support", install=True)
+    assert len(calls) == 1  # an example with no dependencies runs no `uv add` at all
 
 
 def test_the_same_example_can_be_added_twice(project: Path):

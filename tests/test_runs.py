@@ -65,6 +65,13 @@ async def test_all_messages_spans_every_step():
     assert len(result.all_messages()) == len(first.all_messages()) + len(second.all_messages())
 
 
+async def test_a_run_can_resume_from_history_with_no_new_prompt():
+    flow = Flow(UsageLimits())
+    first = await flow.run(make(), "a", deps=None)
+    again = await flow.run(make(), None, deps=None, message_history=first.all_messages())
+    assert len(flow.steps) == 2 and again.output == "hello"
+
+
 async def test_an_unnamed_agent_gets_a_default_label():
     flow = Flow(UsageLimits())
     await flow.run(make(name=None), "a", deps=None)

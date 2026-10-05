@@ -1,0 +1,8 @@
+title = "Conversation"
+pattern = "conversation"
+summary = "Remember earlier turns with message history, bound the context window by turns, and stream replies as they are generated."
+smoke_input = "Hi! My name is Priya and I'm planning a trip to Lisbon."
+
+[entrypoint]
+deps = "ChatDeps"
+run = "run_chat"
