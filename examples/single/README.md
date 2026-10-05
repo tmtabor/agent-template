@@ -2,6 +2,8 @@
 
 One agent handles the whole task. The simplest pattern and the lowest complexity.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** one agent can do the full job and nothing needs specializing or delegating.
 
 **What it shows**

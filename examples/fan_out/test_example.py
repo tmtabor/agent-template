@@ -94,3 +94,17 @@ async def test_when_every_worker_fails_nothing_is_summarized():
         pytest.raises(AllWorkersFailedError),
     ):
         await run_fan_out("a topic")
+
+
+async def test_cancellation_is_not_mistaken_for_a_failed_worker():
+    """A cancelled worker is not "a worker failed": the cancellation must propagate."""
+
+    async def cancelled(messages, info: AgentInfo) -> ModelResponse:
+        raise asyncio.CancelledError
+
+    with (
+        worker_agent.override(model=FunctionModel(cancelled)),
+        aggregator_agent.override(model=summarizer([])),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await run_fan_out("a topic")

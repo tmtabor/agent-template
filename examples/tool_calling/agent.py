@@ -5,17 +5,25 @@ Use this pattern when:
 - You want the LLM to decide which tools to call and when
 - Tool results inform subsequent decisions (agentic loop)
 
+This example answers questions about Python releases by calling a lookup tool. The data
+lives in a small in-memory table so it runs anywhere; in a real agent, `ReleaseNotes` is
+where an API client or database connection goes.
+
 Key design principles (from production experience):
 - Keep tool interfaces simple: fewer optional params = more reliable tool selection
 - Translate errors into English: give the LLM enough context to self-correct
 - Hold large payloads at the tool layer: don't dump raw API responses into context
+- Inject the backend through deps, so tests (and you) can swap it
 
-See agent/tools/example.py for the full tool implementation pattern.
+The tool shows all three error outcomes: success, `ModelRetry` (the model can fix its input),
+and `ToolFailed` (expected and terminal — there is nothing to find). See
+agent/tools/example.py for the same convention in a standalone tool.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 from pydantic_ai import Agent, ModelRetry, RunContext, ToolFailed
@@ -40,15 +48,49 @@ USAGE_LIMITS = UsageLimits(
 )
 
 
+# --- The backend the tool talks to ---
+@dataclass(frozen=True)
+class Release:
+    released: str
+    highlights: tuple[str, ...]
+
+
+# Replace with a real data source. A dict stands in for an API or database here.
+RELEASES: dict[str, Release] = {
+    "3.11": Release(
+        "October 24, 2022",
+        (
+            "CPython runs about 25% faster on average (the Faster CPython project)",
+            "exception groups and except* (PEP 654)",
+            "tomllib adds TOML parsing to the standard library (PEP 680)",
+        ),
+    ),
+    "3.12": Release(
+        "October 2, 2023",
+        (
+            "cleaner generics syntax: type parameters and the type statement (PEP 695)",
+            "f-strings can nest quotes and span lines (PEP 701)",
+            "per-interpreter GIL for subinterpreters (PEP 684)",
+        ),
+    ),
+    "3.13": Release(
+        "October 7, 2024",
+        (
+            "an experimental free-threaded build with the GIL disabled (PEP 703)",
+            "an experimental JIT compiler (PEP 744)",
+            "a new interactive interpreter with multi-line editing and colour",
+        ),
+    ),
+}
+
+
 # --- Dependencies ---
 @dataclass
 class ToolAgentDeps:
     """Runtime dependencies for the tool-calling agent."""
 
-    # Add API clients, DB connections, etc.
-    # example (requires `from dataclasses import field`):
-    # api_client: MyAPIClient = field(default_factory=MyAPIClient)
-    pass
+    # The release table the tool reads. Swap in an API client or database in a real agent.
+    releases: dict[str, Release] = field(default_factory=lambda: RELEASES)
 
 
 # --- Output type ---
@@ -59,62 +101,66 @@ class ToolAgentOutput(BaseModel):
     # Pydantic deep-copies mutable defaults, so a plain [] is safe here.
     # Do NOT use dataclasses.field() inside a BaseModel — it is not a
     # Pydantic construct (use pydantic.Field(default_factory=...) if needed).
-    tools_used: list[str] = []
+    versions: list[str] = []
 
 
 # --- Agent ---
 tool_agent: Agent[ToolAgentDeps, ToolAgentOutput] = Agent(
     settings.model,
-    name=LABEL,
+    name=LABEL,  # labels this agent's run span in Logfire traces
     output_type=ToolAgentOutput,
     deps_type=ToolAgentDeps,
     # Fail fast when the provider filters a response, instead of retrying a
     # refused request or returning partial text.
     capabilities=[RaiseContentFilterError()],
-    instructions="""You are an agent with access to tools.
+    instructions="""You answer questions about Python releases.
 
-    Use tools when you need external information or to take actions.
-    If a tool fails, read the error message carefully — it will tell you how to recover.
+    Use the python_release_notes tool for every fact about a release; do not answer from
+    memory. If the tool reports that nothing is available for a version, tell the user that
+    plainly and do not guess. In `versions`, list the versions your answer draws on.
     """,
 )
 
+VERSION_FORMAT = re.compile(r"\d+\.\d+")
+
 
 # --- Tools ---
-# See agent/tools/example.py for the full pattern with proper error handling.
-
-
 @tool_agent.tool
-async def example_tool(ctx: RunContext[ToolAgentDeps], query: str) -> str:
-    """Search for information about the given query.
+async def python_release_notes(ctx: RunContext[ToolAgentDeps], version: str) -> str:
+    """Look up the release date and headline features of a Python release.
 
     Args:
-        query: What to search for. Be specific.
+        version: A major.minor version such as "3.13". Not "3.13.1" and not "latest".
 
     Returns:
-        Relevant information as a string.
+        The release date and highlights as a short paragraph.
 
     Raises:
-        ModelRetry: When the tool fails in a way the LLM can correct.
-        ToolFailed: When the tool fails in an expected, terminal way (e.g. not found).
+        ModelRetry: When the version isn't in major.minor form, so the model can correct it.
+        ToolFailed: When there are no notes for that version (a terminal, expected failure).
     """
-    try:
-        # Replace with real implementation
-        logger.info("Tool called", extra={"tool": "example_tool", "query": query})
-        return f"Result for: {query}"
-    except ValueError as e:
-        # Translate errors into English so the LLM can self-correct
+    version = version.strip()
+    logger.info("Tool called", extra={"tool": "python_release_notes", "version": version})
+
+    if not VERSION_FORMAT.fullmatch(version):
+        # The model can fix this by changing its input, so ask it to retry.
         raise ModelRetry(
-            f"Invalid query format: {e}. Please provide a query as a plain text string."
-        ) from e
-    except LookupError as e:
-        # Expected, terminal failure: the LLM can work around it but retrying
-        # won't help. ToolFailed spends no retry budget (see agent/tools/example.py).
-        raise ToolFailed(f"Nothing was found for '{query}': {e}.") from e
-    except Exception as e:
-        # Unexpected: log and re-raise. ModelRetry is only for errors the LLM
-        # can correct by changing its input (see agent/tools/example.py).
-        logger.error("Tool failed", extra={"tool": "example_tool", "error": str(e)})
-        raise
+            f"'{version}' is not a major.minor version like '3.13'. "
+            "Call the tool again with just the major and minor numbers."
+        )
+
+    release = ctx.deps.releases.get(version)
+    if release is None:
+        # Nothing exists to find, and retrying won't change that. ToolFailed shows the model
+        # the failure without spending retry budget, and tells it what to do instead.
+        known = ", ".join(sorted(ctx.deps.releases))
+        raise ToolFailed(
+            f"There are no release notes for Python {version}. Known versions: {known}. "
+            "Tell the user this version is unavailable; do not guess its features."
+        )
+
+    highlights = "; ".join(release.highlights)
+    return f"Python {version} was released on {release.released}. Highlights: {highlights}."
 
 
 async def run_tool_agent(
@@ -142,5 +188,5 @@ if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    result = asyncio.run(run_tool_agent("What can you find out about Python 3.13?"))
+    result = asyncio.run(run_tool_agent("What changed in Python 3.13 compared with 3.12?"))
     print(result.output)

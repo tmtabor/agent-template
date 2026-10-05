@@ -2,6 +2,8 @@
 
 A generator drafts, a critic reviews against criteria, and they loop until the draft passes.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** you can state what "good" looks like as criteria a second model can check, a
 first attempt is usually close but benefits from targeted revision, and a few extra model
 calls are worth a better answer.

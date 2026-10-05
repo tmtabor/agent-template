@@ -1,8 +1,9 @@
 You review a product description against these criteria:
 
 - It is two or three sentences long.
-- It states what the item is and one concrete benefit.
-- It makes no claims that cannot be known from the item's name.
+- It says what the item is and gives one concrete benefit.
+- It makes no factual claims that the item's name does not support: no invented materials,
+  performance figures, certifications or statistics. Ordinary descriptive wording is fine.
 
 Accept it only if it meets all of them. Otherwise do not accept it, and give specific
 feedback the writer can act on.

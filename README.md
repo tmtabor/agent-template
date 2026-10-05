@@ -196,6 +196,27 @@ The shared evaluators and runner live in `evals/helpers.py`; the judge in `evals
 
 All of these share the same `@pytest.mark.eval` marker — there's no separate marker for the LLM-judge subset. `uv run pytest -m eval` runs all of them and requires a real API key; the LLM-judge evals also cost money (they make an extra model call per test to grade the output).
 
+## Releasing the template (maintainers)
+
+Before tagging a release, run the release gate yourself, locally. It is manual on purpose — it
+makes real model calls and costs money — so it is not part of CI, which runs only the offline
+tests.
+
+```bash
+# The provider key for AGENT_MODEL must be in .env or the environment
+uv run python scripts/release_check.py            # check every example
+uv run python scripts/release_check.py router     # or just some
+uv run python scripts/release_check.py --record   # also refresh each example's sample_run.md
+```
+
+It runs the offline suite, then each example against the real model (its live tests and a smoke
+run, each capped by the example's `cost_budget_usd`), and fails unless every example passes and
+every line of every example's source was exercised. It prints a summary with tokens and spend.
+It checks whichever model `AGENT_MODEL` names, so reconfigure `.env` as you like (the model needs
+to handle tool calls and structured output; a model that can't will fail the gate). It takes a few
+minutes and costs well under a dollar on a small model. See "Releasing" in
+`AGENTS.md` for the details; `add_agent.py --prune` removes this tooling from your own project.
+
 ## License
 
 BSD 3-Clause — see [LICENSE](LICENSE).

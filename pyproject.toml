@@ -17,6 +17,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pydantic-evals>=2.54.0",
     "ruff>=0.16.10",
+    "coverage>=7.16.2",
 ]
 
 [tool.pytest.ini_options]
@@ -52,3 +53,14 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["agent", "examples", "example_manifest", "add_agent"]
 combine-as-imports = true
+
+# Line coverage of the example source, measured over the offline and live (`eval`) tests
+# together by scripts/release_check.py. Every line of examples/*/agent.py must be exercised.
+[tool.coverage.run]
+source = ["examples"]
+
+[tool.coverage.report]
+include = ["examples/*/agent.py"]
+show_missing = true
+skip_covered = false
+fail_under = 100

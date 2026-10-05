@@ -10,6 +10,8 @@ Schema — every key but `title`, `pattern`, `summary`, `smoke_input` and
     pattern = "supervisor"            # category for the index and docs
     summary = "One-line description."
     smoke_input = "Input used by smoke tests and the generated eval starter."
+    expected_tools = ["tool_name"]    # tools a real model must call in the live release check
+    cost_budget_usd = 0.25            # the live release check fails above this (default 0.25)
     dependencies = ["httpx>=0.28"]    # PEP 508 requirements beyond the template's own
     env = ["SOME_API_KEY"]            # extra environment variables the example needs
     services = ["temporal"]           # external services it needs running
@@ -22,7 +24,7 @@ Schema — every key but `title`, `pattern`, `summary`, `smoke_input` and
     # How smoke tests configure each agent's TestModel, keyed by the agent's variable name.
     # Agents with no entry get the default: a TestModel that calls no tools.
     [smoke.supervisor_agent]
-    call_tools = ["delegate_to_worker_a"]   # tools to opt in to calling (and then expect called)
+    call_tools = ["delegate_to_analyst"]   # tools to opt in to calling (and then expect called)
 
     [smoke.extraction_agent]
     output = { name = "Ada", email = "ada@example.com" }   # the output TestModel returns, for
@@ -40,8 +42,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = REPO_ROOT / "examples"
 
 REQUIRED = {"title", "pattern", "summary", "smoke_input", "entrypoint"}
-OPTIONAL_LISTS = ("dependencies", "env", "services")
-KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke"}
+OPTIONAL_LISTS = ("expected_tools", "dependencies", "env", "services")
+DEFAULT_COST_BUDGET_USD = 0.25
+KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke", "cost_budget_usd"}
 ENTRYPOINT_KEYS = {"deps", "run"}
 SMOKE_KEYS = {"call_tools", "output"}
 
@@ -72,6 +75,8 @@ class Example:
     smoke_input: str
     deps: str
     run: str
+    expected_tools: tuple[str, ...] = ()
+    cost_budget_usd: float = DEFAULT_COST_BUDGET_USD
     dependencies: tuple[str, ...] = ()
     env: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
@@ -152,6 +157,9 @@ def load(path: Path) -> Example:
             raise ManifestError(f"{where}: entrypoint `{key}` must be a Python identifier")
 
     smoke = _smoke(data.get("smoke", {}), where)
+    budget = data.get("cost_budget_usd", DEFAULT_COST_BUDGET_USD)
+    if isinstance(budget, bool) or not isinstance(budget, int | float) or budget <= 0:
+        raise ManifestError(f"{where}: `cost_budget_usd` must be a positive number")
 
     dependencies = _string_list(data, "dependencies", where)
     for requirement in dependencies:
@@ -175,6 +183,8 @@ def load(path: Path) -> Example:
         services=_string_list(data, "services", where),
         templated=data.get("templated", False),
         smoke=smoke,
+        expected_tools=_string_list(data, "expected_tools", where),
+        cost_budget_usd=float(budget),
     )
 
 

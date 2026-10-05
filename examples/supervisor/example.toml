@@ -1,11 +1,13 @@
 title = "Supervisor / workers"
 pattern = "supervisor"
-summary = "A supervisor delegates to specialized worker agents and synthesizes their results."
-smoke_input = "Complete this complex task: summarize the benefits of unit tests."
+summary = "A supervisor decides which specialized workers to call, and in what order, then synthesizes their results."
+smoke_input = "Research the pros and cons of remote work, then write two sentences about it for a manager."
+# A real model must delegate to both workers for this input (checked by the release check).
+expected_tools = ["delegate_to_analyst", "delegate_to_writer"]
 
-# The offline smoke test opts in to the delegation tool, so the worker really runs.
+# The offline smoke test opts in to both delegation tools, so both workers really run.
 [smoke.supervisor_agent]
-call_tools = ["delegate_to_worker_a"]
+call_tools = ["delegate_to_analyst", "delegate_to_writer"]
 
 [entrypoint]
 deps = "SharedDeps"

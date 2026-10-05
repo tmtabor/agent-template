@@ -3,17 +3,21 @@
 Use this pattern when:
 - A task can be broken into specialized subtasks
 - Different agents have different tools, instructions, or output types
-- You want a coordinator to manage escalation and routing
+- You want a coordinator that *decides* which workers to call, and in what order
 
 Architecture:
-    supervisor_agent → decides which worker to call
-    worker_agent_a   → handles task type A
-    worker_agent_b   → handles task type B
+    supervisor_agent → decides which worker to call, and what to hand it
+    analyst_agent    → researches a question and returns key findings
+    writer_agent     → turns material into clear prose
 
-To use:
-    1. Define worker agents with their specialized tools and instructions
-    2. Give the supervisor tools that delegate to workers
-    3. The supervisor orchestrates; workers execute
+The supervisor sees each worker as a tool. The model chooses whether to call the analyst, the
+writer, both (and in which order), or neither — that choice is what separates this from
+`pipeline` (fixed order, chosen by code) and `router` (one specialist, chosen by code).
+
+To adapt it:
+    1. Replace the workers with your own, each with its specialized tools and instructions
+    2. Give the supervisor one delegation tool per worker
+    3. Describe, in the supervisor's instructions, when each worker is the right call
 """
 
 from __future__ import annotations
@@ -34,12 +38,12 @@ LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
 
 # Guardrail against runaway agentic loops. A run that exceeds any limit
 # raises UsageLimitExceeded instead of silently burning tokens. Worker runs
-# share the supervisor's budget (see delegate_to_worker_a), so this bounds
+# share the supervisor's budget (see the delegation tools), so this bounds
 # the whole delegation tree, not just the supervisor's own requests. Set
 # AGENT_COST_LIMIT (USD) to add a spend cap — optional, off by default, and only
 # useful for models with known pricing (see Settings.cost_limit).
 USAGE_LIMITS = UsageLimits(
-    request_limit=10, total_tokens_limit=100_000, cost_limit=settings.cost_limit
+    request_limit=12, total_tokens_limit=100_000, cost_limit=settings.cost_limit
 )
 
 
@@ -55,22 +59,40 @@ class SharedDeps:
 # Each worker is a specialized agent with its own instructions and tools.
 
 
-class WorkerAOutput(BaseModel):
-    result: str
+class Findings(BaseModel):
+    points: list[str]
 
 
-worker_agent_a: Agent[SharedDeps, WorkerAOutput] = Agent(
+analyst_agent: Agent[SharedDeps, Findings] = Agent(
     settings.model,
-    name=f"{LABEL}.worker_a",  # helpers are labeled <agent>.<role>
-    output_type=WorkerAOutput,
+    name=f"{LABEL}.analyst",  # helpers are labeled <agent>.<role>
+    output_type=Findings,
     deps_type=SharedDeps,
     # Fail fast when the provider filters a response, instead of retrying a
     # refused request or returning partial text.
     capabilities=[RaiseContentFilterError()],
-    instructions="You are a specialist in [TASK TYPE A]. [Add specific instructions.]",
+    instructions=(
+        "You are an analyst. Given a question or topic, list its key findings as three to five "
+        "short, factual points. Do not write prose; the points are handed to a writer."
+    ),
 )
 
-# Add worker_agent_b, worker_agent_c etc. as needed
+
+class Draft(BaseModel):
+    text: str
+
+
+writer_agent: Agent[SharedDeps, Draft] = Agent(
+    settings.model,
+    name=f"{LABEL}.writer",
+    output_type=Draft,
+    deps_type=SharedDeps,
+    capabilities=[RaiseContentFilterError()],
+    instructions=(
+        "You are a writer. Turn the material you are given into clear, concise prose that "
+        "follows any instructions about length or audience. Use only the material provided."
+    ),
+)
 
 
 # --- Supervisor agent ---
@@ -89,35 +111,52 @@ supervisor_agent: Agent[SharedDeps, SupervisorOutput] = Agent(
     # Fail fast when the provider filters a response, instead of retrying a
     # refused request or returning partial text.
     capabilities=[RaiseContentFilterError()],
-    instructions="""You are a supervisor coordinating specialized workers.
+    instructions="""You coordinate two workers to answer the user's request.
 
-    Analyze the task, delegate to the appropriate worker, and synthesize results.
-    Use the available delegation tools to call workers.
+    - delegate_to_analyst: researches a question and returns key findings.
+    - delegate_to_writer: turns material into prose. It knows only what you pass it, so
+      include the findings and any instructions about length or audience in `task`.
+
+    For a request that needs research and a written answer, call the analyst first, then the
+    writer with the analyst's findings. If one worker is enough, call only that one. Return
+    the final text in `result`, and in `steps_taken` list each worker you called, in order.
     """,
 )
 
 
 # --- Supervisor tools that delegate to workers ---
 @supervisor_agent.tool
-async def delegate_to_worker_a(ctx: RunContext[SharedDeps], task: str) -> str:
-    """Delegate a [TASK TYPE A] task to the specialized worker.
+async def delegate_to_analyst(ctx: RunContext[SharedDeps], task: str) -> str:
+    """Ask the analyst to research a question or topic.
 
     Args:
-        task: The specific task for the worker to complete.
+        task: The question or topic to analyze.
 
     Returns:
-        The worker's result as a string.
+        The analyst's key findings, one per line.
     """
-    logger.info("Delegating to worker A", extra={"task": task})
+    logger.info("Delegating to analyst", extra={"task": task})
     # usage=ctx.usage makes the worker's spend count against the supervisor
     # run's shared budget — the standard pydantic-ai delegation pattern.
-    result = await worker_agent_a.run(
+    result = await analyst_agent.run(
         task, deps=ctx.deps, usage=ctx.usage, usage_limits=USAGE_LIMITS
     )
-    return result.output.result
+    return "\n".join(f"- {point}" for point in result.output.points)
 
 
-# Add more delegation tools for other workers
+@supervisor_agent.tool
+async def delegate_to_writer(ctx: RunContext[SharedDeps], task: str) -> str:
+    """Ask the writer to turn material into prose.
+
+    Args:
+        task: The material to write from, plus any instructions about length or audience.
+
+    Returns:
+        The written text.
+    """
+    logger.info("Delegating to writer", extra={"task": task})
+    result = await writer_agent.run(task, deps=ctx.deps, usage=ctx.usage, usage_limits=USAGE_LIMITS)
+    return result.output.text
 
 
 async def run_supervisor(
@@ -145,5 +184,9 @@ if __name__ == "__main__":
     import asyncio
 
     configure_logging()
-    result = asyncio.run(run_supervisor("Complete this complex task..."))
+    result = asyncio.run(
+        run_supervisor(
+            "Research the pros and cons of remote work, then write two sentences about it for a manager."
+        )
+    )
     print(result.output)

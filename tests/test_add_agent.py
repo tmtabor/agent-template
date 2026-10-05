@@ -156,7 +156,10 @@ def test_invalid_names_are_rejected(project: Path, name: str):
 
 def test_prune_keeps_blank_and_the_scripts(project: Path):
     (project / "mkdocs.yml").write_text("site_name: x\n")
+    (project / "scripts" / "release_check.py").write_text("")
     add_agent.prune(project)
+    assert not (project / "scripts" / "release_check.py").exists()
+    assert (project / "scripts" / "add_agent.py").exists()
     assert sorted(p.name for p in (project / "examples").iterdir() if p.is_dir()) == ["blank"]
     assert not (project / "mkdocs.yml").exists()
     # Agents can still be added after pruning.

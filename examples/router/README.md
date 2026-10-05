@@ -2,6 +2,8 @@
 
 A cheap classifier picks a category, and plain code sends the input to the right specialist.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** inputs fall into a known set of categories, each best handled by its own
 agent, and you want routing that is predictable, testable and cheap.
 

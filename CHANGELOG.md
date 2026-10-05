@@ -47,11 +47,28 @@ have cloned the template: what changed, and whether you need to do anything.
   cap). Each has its own `test_example.py` covering its orchestration.
 - `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
   gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
+- `scripts/release_check.py`, the live pre-release gate: the offline suite under coverage, then
+  each example in its own `uv run` environment under a spend cap — its real-model live tests
+  (`examples/<name>/test_live.py`, which also require that every agent the example defines ran),
+  and a smoke run — and a gate that every line of every example's source was exercised.
+  `scripts/record_example.py` writes each example's `sample_run.md` transcript from its
+  `RunResult`. The gate is a manual, local step and is not part of CI. `example.toml` gains optional
+  `expected_tools` and `cost_budget_usd`. `evals/trace.py` (`traced_run`) reports every agent and
+  tool call a run made, from its spans. `add_agent.py --prune` removes the release tooling.
+- Two examples now do real work. `tool_calling` looks up Python release notes with a tool that
+  shows all three error outcomes (its old placeholder tool echoed the query, so a real model
+  looped on it), and `supervisor` coordinates a real analyst and writer instead of one
+  placeholder worker. The `evaluator_optimizer` critic's criteria were tightened so the loop
+  converges in two or three rounds.
 - `agent/runs.py`: `RunResult` (output, total usage, per-step results) and `Flow`, which runs
   agents against one shared budget and records each step. Every example's `run_*` returns a
   `RunResult`, so tests, evals and callers can see how an answer was produced.
 - Per-agent `[smoke.<agent>]` tables in `example.toml` (`call_tools`, `output`), for agents whose
   smoke tests need a tool called or whose validators reject `TestModel`'s generated junk.
+- The offline test suite is now hermetic: a root `conftest.py` forces `AGENT_MODEL=test` unless
+  the command line selects the live tests (`-m eval`), so `uv run pytest` passes with no provider
+  key whatever `.env` configures. Previously it crashed on import if `.env` named a provider whose
+  key was missing.
 - `evals/helpers.py`: shared eval evaluators, fixture loader and dataset runner.
 - `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
 

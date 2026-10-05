@@ -2,6 +2,8 @@
 
 Turn unstructured text into a validated schema.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** the input is free text (emails, tickets, documents) and you need typed
 fields out, and bad output should be caught and corrected rather than passed downstream.
 

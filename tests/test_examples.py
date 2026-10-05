@@ -100,6 +100,17 @@ def test_agents_are_labeled_with_the_example_name(example):
         assert is_labeled(found.name, example.name), found.name
 
 
+@pytest.mark.parametrize("example", example_ids())
+def test_every_example_has_a_recorded_sample_run_that_matches_it(example):
+    """The transcript comes from scripts/release_check.py --record; this catches a stale one."""
+    transcript = example.path / "sample_run.md"
+    assert transcript.is_file(), f"record it: scripts/release_check.py --record {example.name}"
+    text = transcript.read_text(encoding="utf-8")
+    assert text.startswith(f"# Sample run: {example.title}")
+    assert example.smoke_input in text, "the smoke input changed since this was recorded"
+    assert "sample_run.md" in (example.path / "README.md").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     ("toml", "message"),
     [

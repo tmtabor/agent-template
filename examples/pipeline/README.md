@@ -2,6 +2,8 @@
 
 Fixed sequential steps, each one's output feeding the next. Also called a prompt chain.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** a task decomposes into stages that always run in the same order, each stage
 is more reliable as its own focused prompt, and you want to check intermediate results and
 stop early.

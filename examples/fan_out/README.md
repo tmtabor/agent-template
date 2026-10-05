@@ -2,6 +2,8 @@
 
 Run independent workers in parallel, then combine what they found.
 
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+
 **Use it when** subtasks are independent (different perspectives, sources or chunks of a
 document), wall-clock time matters, or one worker failing shouldn't sink the whole answer.
 

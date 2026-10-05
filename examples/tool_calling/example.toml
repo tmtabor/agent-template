@@ -1,7 +1,9 @@
 title = "Tool-calling agent"
 pattern = "tool_calling"
 summary = "An agent that calls tools against external systems, with the three-outcome error convention."
-smoke_input = "What can you find out about Python 3.13?"
+smoke_input = "What changed in Python 3.13 compared with 3.12?"
+# A real model must use the tool to answer this (checked by the release check).
+expected_tools = ["python_release_notes"]
 
 [entrypoint]
 deps = "ToolAgentDeps"

@@ -37,8 +37,14 @@ PRUNE_PATHS = [
     "docs",
     "mkdocs.yml",
     ".github/workflows/docs.yml",
+    # Maintainer tooling for the example library: the live release gate and its tests.
+    "scripts/release_check.py",
+    "scripts/record_example.py",
+    "scripts/live_run.py",
     "tests/test_examples.py",
     "tests/test_add_agent.py",
+    "tests/test_live_tools.py",
+    "tests/test_trace.py",
 ]
 
 
