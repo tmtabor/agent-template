@@ -5,6 +5,8 @@ end to end: the copied module imports, its generated smoke test passes under
 TestModel, its eval starter collects, and prompt paths are rewritten correctly.
 """
 
+import json
+import os
 import shutil
 import subprocess
 import sys
@@ -42,6 +44,22 @@ def pytest_in(project: Path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
+def agent_names(project: Path, name: str) -> list[str]:
+    """Names of every Agent in the copied agent.agents.<name>, read in the scratch project."""
+    snippet = (
+        "import json, importlib\n"
+        "from pydantic_ai import Agent\n"
+        f"m = importlib.import_module('agent.agents.{name}')\n"
+        "print(json.dumps([v.name for v in vars(m).values() if isinstance(v, Agent)]))\n"
+    )
+    env = {**os.environ, "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "dummy")}
+    out = subprocess.run(
+        [sys.executable, "-c", snippet], cwd=project, capture_output=True, text=True, env=env
+    )
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.splitlines()[-1])
+
+
 def example(name: str):
     return next(e for e in discover() if e.name == name)
 
@@ -67,6 +85,11 @@ def test_added_agent_runs_and_its_evals_collect(project: Path, ex):
 
     result = pytest_in(project, "tests/test_agents_my_agent.py")
     assert result.returncode == 0, result.stdout + result.stderr
+
+    # Trace labels follow the name the user chose, not the example's.
+    labels = agent_names(project, "my_agent")
+    assert labels
+    assert all(n == "my_agent" or n.startswith("my_agent.") for n in labels), labels
 
     # Generated files must pass the repo's own lint and format checks (a user's CI runs them).
     generated = [

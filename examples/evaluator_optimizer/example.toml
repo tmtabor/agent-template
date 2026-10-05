@@ -1,0 +1,9 @@
+title = "Evaluator–optimizer"
+pattern = "evaluator_optimizer"
+summary = "A generator drafts and a critic reviews against criteria; they loop until it passes or a round cap is hit."
+smoke_input = "A stainless steel water bottle"
+
+[entrypoint]
+agent = "generator_agent"
+deps = "EvaluatorOptimizerDeps"
+run = "run_evaluator_optimizer"

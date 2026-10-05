@@ -20,10 +20,11 @@ from pydantic_ai.capabilities import RaiseContentFilterError
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
-from agent.logging import configure_logging, get_logger
+from agent.logging import agent_label, configure_logging, get_logger
 from agent.prompts.templates import load_prompt
 
 logger = get_logger(__name__)
+LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
 
 # Guardrail against runaway agentic loops. A run that exceeds any limit
 # raises UsageLimitExceeded instead of silently burning tokens. Tune per task:
@@ -58,7 +59,7 @@ class BlankDeps:
 # --- Agent definition ---
 blank_agent: Agent[BlankDeps, BlankOutput] = Agent(
     settings.model,
-    name="blank",  # labels this agent's run span in Logfire traces
+    name=LABEL,
     output_type=BlankOutput,
     deps_type=BlankDeps,
     # Fail fast when the provider filters a response, instead of retrying a

@@ -104,22 +104,31 @@ def rename(text: str, example: Example, name: str) -> str:
 
 def smoke_test_source(example: Example, name: str) -> str:
     agent, deps = (rename(s, example, name) for s in (example.agent, example.deps))
-    opt_in = bool(example.smoke_tools)
+    tools = list(example.smoke_tools)
+    # Without opt-ins the autouse safety net in tests/conftest.py already supplies a
+    # TestModel that calls no tools. Build our own only to opt in to tools or to supply
+    # an output the agent's validators accept (TestModel's generated junk would fail them).
+    own_model = bool(tools) or example.smoke_output is not None
     imports = ""
-    if opt_in:
-        imports = (
-            "from pydantic_ai.messages import ToolReturnPart\n"
-            "from pydantic_ai.models.test import TestModel\n\n"
-        )
-    body = f'    result = await {agent}.run("Smoke test input", deps={deps}())\n'
-    check = "    assert result.output is not None\n"
-    if opt_in:
-        tools = list(example.smoke_tools)
+    if tools:
+        imports += "from pydantic_ai.messages import ToolReturnPart\n"
+    if own_model:
+        imports += "from pydantic_ai.models.test import TestModel\n"
+    if imports:
+        imports += "\n"
+
+    if own_model:
+        kwargs = f"call_tools={tools!r}"
+        if example.smoke_output is not None:
+            kwargs += f", custom_output_args={example.smoke_output!r}"
         body = (
-            f"    # The safety net calls no tools; this test opts in to the ones below.\n"
-            f"    with {agent}.override(model=TestModel(call_tools={tools!r})):\n"
+            f"    with {agent}.override(model=TestModel({kwargs})):\n"
             f'        result = await {agent}.run("Smoke test input", deps={deps}())\n'
         )
+    else:
+        body = f'    result = await {agent}.run("Smoke test input", deps={deps}())\n'
+    check = "    assert result.output is not None\n"
+    if tools:
         check += (
             "    called = {\n"
             "        part.tool_name\n"

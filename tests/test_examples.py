@@ -8,11 +8,11 @@ aren't installed in this environment is skipped, not failed.
 from pathlib import Path
 
 import pytest
+from pydantic_ai import Agent
 from pydantic_ai.messages import ToolReturnPart
-from pydantic_ai.models.test import TestModel
 
 from example_manifest import EXAMPLES_DIR, ManifestError, load
-from tests.examples_support import EXAMPLES, example_ids, import_example
+from tests.examples_support import EXAMPLES, example_ids, import_example, smoke_model
 
 
 def test_examples_exist():
@@ -53,8 +53,7 @@ async def test_example_runs_with_test_model(example):
     deps = getattr(module, example.deps)()
 
     # The safety net calls no tools; opt in to the ones the manifest names.
-    model = TestModel(call_tools=list(example.smoke_tools))
-    with main_agent.override(model=model):
+    with main_agent.override(model=smoke_model(example)):
         result = await main_agent.run(example.smoke_input, deps=deps)
     assert result.output is not None
 
@@ -80,3 +79,16 @@ def test_invalid_manifests_are_rejected(tmp_path: Path, toml: str, message: str)
     (tmp_path / "example.toml").write_text(toml)
     with pytest.raises(ManifestError, match=message):
         load(tmp_path)
+
+
+def agents_in(module) -> list[Agent]:
+    return [v for v in vars(module).values() if isinstance(v, Agent)]
+
+
+@pytest.mark.parametrize("example", example_ids())
+def test_agents_are_labeled_with_the_example_name(example):
+    """Labels follow the module name, so a copy is labeled with its chosen name."""
+    agents = agents_in(import_example(example))
+    assert agents, f"{example.module} defines no Agent"
+    for found in agents:
+        assert found.name == example.name or (found.name or "").startswith(f"{example.name}.")

@@ -1,4 +1,6 @@
 import logging
+import sys
+from pathlib import Path
 
 import logfire
 
@@ -58,3 +60,26 @@ def get_logger(name: str) -> logging.Logger:
     Usage: logger = get_logger(__name__)
     """
     return logging.getLogger(name)
+
+
+def agent_label(module_name: str) -> str:
+    """Name for an Agent's run span in Logfire: the agent's own name.
+
+    Use as `LABEL = agent_label(__name__)` and pass `name=LABEL` (or
+    `name=f"{LABEL}.worker"` for helper agents in the same module). A copied agent
+    (`agent.agents.triage`) is labeled `triage`; an example run in place
+    (`examples.supervisor.agent`) is labeled with its directory, `supervisor`. So the
+    label follows the name you gave the agent without any renaming of the source.
+    """
+    if module_name == "__main__":
+        # Run as a script (`python agent/agents/triage.py`) or `python -m agent.agents.triage`.
+        main = sys.modules["__main__"]
+        spec = getattr(main, "__spec__", None)
+        if spec is not None:
+            module_name = spec.name
+        elif getattr(main, "__file__", None):
+            module_name = Path(main.__file__).stem
+    parts = module_name.split(".")
+    if parts[0] == "examples" and len(parts) >= 2:
+        return parts[1]
+    return parts[-1]

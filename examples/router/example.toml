@@ -1,0 +1,9 @@
+title = "Router"
+pattern = "router"
+summary = "A classifier picks a category and plain code dispatches to a specialist agent; routing is a lookup, not an LLM loop."
+smoke_input = "I was charged twice for my subscription this month."
+
+[entrypoint]
+agent = "router_agent"
+deps = "RouterDeps"
+run = "run_router"

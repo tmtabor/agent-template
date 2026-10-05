@@ -36,12 +36,21 @@ have cloned the template: what changed, and whether you need to do anything.
   cost-limit tests), and `tests/test_add_agent.py`, which runs the real script into a scratch
   copy of the repo and checks that what it generates imports, passes its own smoke test and
   lint, and has collectable evals.
+- Five more examples: `extraction` (output validator + retry budget), `router` (classifier
+  plus code dispatch), `pipeline` (chained steps with gates), `fan_out` (parallel workers,
+  tolerating a failed one) and `evaluator_optimizer` (generate/critique loop with a round
+  cap). Each has its own `test_example.py` covering its orchestration.
+- `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
+  gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
+- Optional `[smoke_output]` in `example.toml`, for agents whose output validators reject
+  `TestModel`'s generated junk.
 - `evals/helpers.py`: shared eval evaluators, fixture loader and dataset runner.
 - `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
 
 ### Changed
 - The three pattern stubs moved from `agent/agents/` to `examples/` and are copied into your
   project on demand; the unit-test safety net now also covers `examples/`.
+- The unit-test safety net also finds agents held in module-level dicts, lists and tuples.
 - `tests/test_safety_net.py` and the `TestModel` recipe (`examples/single/test_example.py`)
   no longer depend on a chosen agent.
 

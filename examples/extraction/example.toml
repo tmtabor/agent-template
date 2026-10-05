@@ -1,0 +1,16 @@
+title = "Structured extraction"
+pattern = "extraction"
+summary = "Turn free text into a validated schema, with an output validator that sends bad answers back for correction."
+smoke_input = "Hi, it's Ada Lovelace from Analytical Engines Ltd. Reach me at ada@example.com."
+
+# TestModel's generated junk ("a" for every string) fails the validator, so the
+# smoke tests supply an output it accepts.
+[smoke_output]
+name = "Ada Lovelace"
+email = "ada@example.com"
+company = "Analytical Engines Ltd"
+
+[entrypoint]
+agent = "extraction_agent"
+deps = "ExtractionDeps"
+run = "run_extraction"

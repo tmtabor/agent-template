@@ -12,11 +12,10 @@ from decimal import Decimal
 import pytest
 from pydantic_ai._warnings import CostNotFoundWarning
 from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
 from agent.config import Settings, settings
-from tests.examples_support import example_ids, import_example
+from tests.examples_support import example_ids, import_example, smoke_model
 
 
 def test_cost_limit_is_off_by_default():
@@ -42,8 +41,7 @@ async def test_no_cost_warning_when_no_cost_limit_is_set(example):
 
     main_agent = getattr(module, example.agent)
     deps = getattr(module, example.deps)()
-    model = TestModel(call_tools=list(example.smoke_tools))
-    with main_agent.override(model=model), warnings.catch_warnings():
+    with main_agent.override(model=smoke_model(example)), warnings.catch_warnings():
         warnings.simplefilter("error", CostNotFoundWarning)
         await main_agent.run("Smoke test input", deps=deps, usage_limits=module.USAGE_LIMITS)
 

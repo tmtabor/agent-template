@@ -41,3 +41,24 @@ def test_content_follows_setting_but_explicit_argument_wins(monkeypatch, calls):
     calls.clear()
     agent_logging.configure_logging(include_content=True)
     assert calls["instrument"] == {"include_content": True}
+
+
+@pytest.mark.parametrize(
+    ("module_name", "label"),
+    [
+        ("agent.agents.triage", "triage"),
+        ("examples.supervisor.agent", "supervisor"),
+        ("triage", "triage"),
+    ],
+)
+def test_agent_label_follows_the_module(module_name, label):
+    assert agent_logging.agent_label(module_name) == label
+
+
+def test_agent_label_when_run_as_a_script(monkeypatch):
+    class Main:
+        __file__ = "/project/agent/agents/triage.py"
+        __spec__ = None
+
+    monkeypatch.setitem(agent_logging.sys.modules, "__main__", Main)
+    assert agent_logging.agent_label("__main__") == "triage"

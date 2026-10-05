@@ -98,6 +98,11 @@ its prompt, a README and an `example.toml`:
 | `single` | One agent handles the whole task |
 | `supervisor` | A supervisor delegates to specialized workers |
 | `tool_calling` | An agent whose tools call external systems |
+| `extraction` | Free text to a validated schema, with an output validator and retry budget |
+| `router` | A classifier picks a category; code dispatches to a specialist |
+| `pipeline` | Fixed sequential steps, each output feeding the next, with gates |
+| `fan_out` | Parallel workers via `asyncio.gather`, then an aggregator |
+| `evaluator_optimizer` | A generator and a critic loop until the output passes or a cap is hit |
 
 For each agent, `add_agent.py`:
 

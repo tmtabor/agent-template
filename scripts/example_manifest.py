@@ -11,6 +11,9 @@ Schema — every key but `title`, `pattern`, `summary`, `smoke_input` and
     summary = "One-line description."
     smoke_input = "Input used by smoke tests and the generated eval starter."
     smoke_tools = ["tool_name"]       # tools the offline smoke test opts in to calling
+
+    [smoke_output]                    # only if the agent's output validators reject the
+    field = "value"                   # junk TestModel generates: the output TestModel returns
     dependencies = ["httpx>=0.28"]    # PEP 508 requirements beyond the template's own
     env = ["SOME_API_KEY"]            # extra environment variables the example needs
     services = ["temporal"]           # external services it needs running
@@ -34,7 +37,7 @@ EXAMPLES_DIR = REPO_ROOT / "examples"
 
 REQUIRED = {"title", "pattern", "summary", "smoke_input", "entrypoint"}
 OPTIONAL_LISTS = ("smoke_tools", "dependencies", "env", "services")
-KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated"}
+KNOWN = REQUIRED | set(OPTIONAL_LISTS) | {"templated", "smoke_output"}
 ENTRYPOINT_KEYS = {"agent", "deps", "run"}
 
 # A loose PEP 508 check: a distribution name, optional extras, optional specifier
@@ -62,6 +65,7 @@ class Example:
     env: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
     templated: bool = False
+    smoke_output: dict | None = None
 
     @property
     def module(self) -> str:
@@ -114,6 +118,10 @@ def load(path: Path) -> Example:
         if not isinstance(value, str) or not value.isidentifier():
             raise ManifestError(f"{where}: entrypoint `{key}` must be a Python identifier")
 
+    smoke_output = data.get("smoke_output")
+    if smoke_output is not None and not isinstance(smoke_output, dict):
+        raise ManifestError(f"{where}: `smoke_output` must be a table")
+
     dependencies = _string_list(data, "dependencies", where)
     for requirement in dependencies:
         if not REQUIREMENT_RE.match(requirement):
@@ -137,6 +145,7 @@ def load(path: Path) -> Example:
         env=_string_list(data, "env", where),
         services=_string_list(data, "services", where),
         templated=data.get("templated", False),
+        smoke_output=smoke_output,
     )
 
 

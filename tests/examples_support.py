@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic_ai.models.test import TestModel
 
 # scripts/ is not a package; make its modules importable (also done via pytest's
 # `pythonpath` setting, kept here so the helpers work when imported standalone).
@@ -15,6 +16,14 @@ if SCRIPTS not in sys.path:
 from example_manifest import Example, discover  # noqa: E402
 
 EXAMPLES = discover()
+
+
+def smoke_model(example: Example) -> TestModel:
+    """The TestModel a smoke test uses: opted-in tools only, and the manifest's output if set."""
+    kwargs: dict = {"call_tools": list(example.smoke_tools)}
+    if example.smoke_output is not None:
+        kwargs["custom_output_args"] = example.smoke_output
+    return TestModel(**kwargs)
 
 
 def example_ids() -> list[pytest.param]:

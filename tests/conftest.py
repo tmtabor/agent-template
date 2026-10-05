@@ -42,12 +42,25 @@ def _preimport_agent_modules() -> None:
     except ModuleNotFoundError:  # pruned
         return
     for module_info in pkgutil.iter_modules(examples.__path__):
+        if not module_info.ispkg:  # examples/conftest.py is not an example
+            continue
         try:
             importlib.import_module(f"examples.{module_info.name}.agent")
         except ModuleNotFoundError as exc:
             if exc.name and exc.name.split(".")[0] in {"examples", "agent"}:
                 raise
             # A third-party dependency this example declares but the root env lacks.
+
+
+def _agents_in(value) -> list[Agent]:
+    """The Agent(s) a module-level value holds: the value itself, or a dict/list/tuple/set of them."""
+    if isinstance(value, Agent):
+        return [value]
+    if isinstance(value, dict):
+        value = value.values()
+    if isinstance(value, list | tuple | set | frozenset | type({}.values())):
+        return [v for v in value if isinstance(v, Agent)]
+    return []
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -77,9 +90,12 @@ def override_all_agents_with_test_model():
     _preimport_agent_modules()
 
     with ExitStack() as stack:
+        seen: set[int] = set()  # an Agent reachable twice (variable and dict) is overridden once
         for name, module in list(sys.modules.items()):
             if name.startswith(OVERRIDDEN_PREFIXES) and module is not None:
                 for value in vars(module).values():
-                    if isinstance(value, Agent):
-                        stack.enter_context(value.override(model=TestModel(call_tools=[])))
+                    for found in _agents_in(value):
+                        if id(found) not in seen:
+                            seen.add(id(found))
+                            stack.enter_context(found.override(model=TestModel(call_tools=[])))
         yield

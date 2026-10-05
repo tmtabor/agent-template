@@ -26,9 +26,10 @@ from pydantic_ai.capabilities import RaiseContentFilterError
 from pydantic_ai.usage import UsageLimits
 
 from agent.config import settings
-from agent.logging import configure_logging, get_logger
+from agent.logging import agent_label, configure_logging, get_logger
 
 logger = get_logger(__name__)
+LABEL = agent_label(__name__)  # names this agent's run spans in Logfire traces
 
 # Guardrail against runaway agentic loops. A run that exceeds any limit
 # raises UsageLimitExceeded instead of silently burning tokens. Worker runs
@@ -59,7 +60,7 @@ class WorkerAOutput(BaseModel):
 
 worker_agent_a: Agent[SharedDeps, WorkerAOutput] = Agent(
     settings.model,
-    name="worker_a",  # labels this agent's run span in Logfire traces
+    name=f"{LABEL}.worker_a",  # helpers are labeled <agent>.<role>
     output_type=WorkerAOutput,
     deps_type=SharedDeps,
     # Fail fast when the provider filters a response, instead of retrying a
@@ -81,7 +82,7 @@ class SupervisorOutput(BaseModel):
 
 supervisor_agent: Agent[SharedDeps, SupervisorOutput] = Agent(
     settings.model,
-    name="supervisor",
+    name=LABEL,
     output_type=SupervisorOutput,
     deps_type=SharedDeps,
     # Fail fast when the provider filters a response, instead of retrying a

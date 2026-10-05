@@ -40,3 +40,18 @@ async def test_a_test_can_opt_in_to_calling_a_tool():
         await agent.run("hello", deps=BlankDeps())
 
     assert len(calls) == 1
+
+
+def test_agents_held_in_containers_are_found():
+    """The net finds an Agent that a module only holds inside a dict, list or tuple."""
+    from pydantic_ai import Agent
+
+    from tests.conftest import _agents_in
+
+    held = Agent(TestModel())
+    assert _agents_in(held) == [held]
+    assert _agents_in({"a": held, "b": 1}) == [held]
+    assert _agents_in([held, "x"]) == [held]
+    assert _agents_in((held,)) == [held]
+    assert _agents_in("not an agent") == []
+    assert _agents_in({"a": 1}) == []

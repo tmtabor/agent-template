@@ -1,0 +1,9 @@
+title = "Pipeline"
+pattern = "pipeline"
+summary = "Fixed sequential steps in code, each agent's typed output feeding the next, with gates between them."
+smoke_input = "Why unit tests are worth writing"
+
+[entrypoint]
+agent = "outline_agent"
+deps = "PipelineDeps"
+run = "run_pipeline"
