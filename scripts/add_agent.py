@@ -1,270 +1,359 @@
 #!/usr/bin/env python3
-"""Scaffold an additional, independent agent alongside the primary one.
+"""Add an agent to this project by copying an example pattern from examples/.
 
 Usage:
-    uv run python scripts/add_agent.py <name>
+    uv run python scripts/add_agent.py                       # interactive menu
+    uv run python scripts/add_agent.py supervisor --name triage
+    uv run python scripts/add_agent.py blank --name newsletter
+    uv run python scripts/add_agent.py --prune               # drop the examples you don't need
 
-Creates agent/agents/<name>.py, agent/prompts/<name>.txt, and
-tests/test_agents_<name>.py. Unlike scripts/choose_pattern.py, this never
-touches agent/agents/__init__.py — the canonical re-export there
-(run_agent, AgentOutput, AgentDeps, agent) stays reserved for the one
-primary agent chosen by choose_pattern.py. The new agent is meant to be
-imported directly from its own module wherever it's used:
+Run it once per agent you want; each can use a different pattern. It copies the
+example's module to agent/agents/<name>.py and its prompts to agent/prompts/,
+scaffolds a smoke test (tests/test_agents_<name>.py) and an eval starter
+(evals/test_<name>.py), and installs the example's extra dependencies with
+`uv add`. There is no shared "primary" agent: import yours directly, e.g.
 
-    from agent.agents.<name> import <Name>Deps, <Name>Output, <name>_agent, run_<name>_agent
-
-Use this for apps that need several independent, differently-shaped agents
-(e.g. a "newsletter" agent and a "bluesky_post" agent with no shared
-identity) — not for a supervisor delegating to workers it controls, which
-is still one agent from the outside (see agent/agents/supervisor.py).
-"""
-
-import argparse
-import keyword
-import re
-import subprocess
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-AGENTS_DIR = REPO_ROOT / "agent" / "agents"
-PROMPTS_DIR = REPO_ROOT / "agent" / "prompts"
-TESTS_DIR = REPO_ROOT / "tests"
-
-NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-
-# Names that would collide with the canonical primary-agent wiring, the
-# pattern stubs, or the example tool/prompt files.
-RESERVED_NAMES = {
-    "single",
-    "supervisor",
-    "tool_calling",
-    "example",
-    "agent",
-    "agents",
-    "run_agent",
-    "config",
-    "logging",
-    "templates",
-}
-
-AGENT_MODULE_TEMPLATE = '''"""{Name} agent — an additional, independent agent alongside the app's primary agent.
-
-Scaffolded by `scripts/add_agent.py`. This agent is independent of whichever
-pattern (single/supervisor/tool_calling) was chosen for the primary agent —
-it is not re-exported from `agent/agents/__init__.py`; import it directly:
-
-    from agent.agents.{name} import {Name}Deps, {Name}Output, {name}_agent, run_{name}_agent
-
-To use:
-    1. Define your output type (or use str for unstructured output)
-    2. Set your instructions in agent/prompts/{name}.txt
-    3. Add tools if needed
-    4. Call run_{name}_agent()
+    from agent.agents.triage import triage_agent
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import argparse
+import json
+import keyword
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
-from pydantic import BaseModel
-from pydantic_ai import (  # noqa: F401 — RunContext used in commented tool example below
-    Agent,
-    RunContext,
-)
-from pydantic_ai.capabilities import RaiseContentFilterError
-from pydantic_ai.usage import UsageLimits
+from example_manifest import REPO_ROOT, Example, ManifestError, discover
 
-from agent.config import settings
-from agent.logging import configure_logging, get_logger
-from agent.prompts.templates import load_prompt
+NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
-logger = get_logger(__name__)
-
-# Guardrail against runaway agentic loops. A run that exceeds any limit
-# raises UsageLimitExceeded instead of silently burning tokens. Tune per task:
-# request_limit caps model round-trips (each tool-call iteration is one
-# request), total_tokens_limit caps overall tokens. Set AGENT_COST_LIMIT (USD) to
-# add a spend cap — optional, off by default, and only useful for models with
-# known pricing (see Settings.cost_limit).
-USAGE_LIMITS = UsageLimits(
-    request_limit=10, total_tokens_limit=100_000, cost_limit=settings.cost_limit
-)
-
-
-# --- Output type ---
-# Replace with your actual output schema, or use str for unstructured output.
-class {Name}Output(BaseModel):
-    """Replace with your actual output schema."""
-
-    result: str
-
-
-# --- Dependencies ---
-# Use a dataclass to inject runtime dependencies (DB connections, API clients, etc.)
-# Remove if this agent needs no external dependencies.
-@dataclass
-class {Name}Deps:
-    """Runtime dependencies injected into the {name} agent."""
-
-    # example_client: SomeAPIClient  # Add your dependencies here
-    pass
-
-
-# --- Agent definition ---
-{name}_agent: Agent[{Name}Deps, {Name}Output] = Agent(
-    settings.model,
-    name="{name}",  # labels this agent's run span in Logfire traces
-    output_type={Name}Output,
-    deps_type={Name}Deps,
-    # Fail fast when the provider filters a response, instead of retrying a
-    # refused request or returning partial text.
-    capabilities=[RaiseContentFilterError()],
-    instructions=load_prompt("{name}"),  # loads agent/prompts/{name}.txt
-)
-
-
-# --- Tools ---
-# Add tools here. See agent/tools/example.py for the full pattern.
-# @{name}_agent.tool
-# async def my_tool(ctx: RunContext[{Name}Deps], query: str) -> str:
-#     """Tool description — this docstring is sent to the LLM."""
-#     return "result"
-
-
-# --- Dynamic instructions (optional) ---
-# Use @{name}_agent.instructions for instructions that depend on runtime state.
-# @{name}_agent.instructions
-# async def dynamic_instructions(ctx: RunContext[{Name}Deps]) -> str:
-#     return f"Today is {{date.today()}}."
-
-
-async def run_{name}_agent(user_input: str, deps: {Name}Deps | None = None) -> {Name}Output:
-    """Run the {name} agent with the given user input.
-
-    Args:
-        user_input: The user's message or task description.
-        deps: Runtime dependencies. Created with defaults if not provided.
-
-    Returns:
-        Validated {Name}Output instance.
-    """
-    if deps is None:
-        deps = {Name}Deps()
-
-    logger.info("Running {name} agent", extra={{"user_input": user_input}})
-
-    result = await {name}_agent.run(user_input, deps=deps, usage_limits=USAGE_LIMITS)
-
-    logger.info("{Name} agent run complete", extra={{"output": result.output}})
-    return result.output
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    configure_logging()
-    output = asyncio.run(run_{name}_agent("Hello, what can you do?"))
-    print(output)
-'''
-
-PROMPT_TEMPLATE = """You are the {name} agent.
-
-TODO: replace this with real instructions for what the {name} agent should do.
-"""
-
-TEST_MODULE_TEMPLATE = '''"""Smoke test for the {name} agent (scaffolded by scripts/add_agent.py).
-
-Imports directly from agent.agents.{name} — additional agents are not
-re-exported from agent/agents/__init__.py, unlike the primary agent chosen
-by scripts/choose_pattern.py. The autouse TestModel override fixture in
-tests/conftest.py picks this agent up automatically (it scans every module
-under agent.agents for Agent instances), so no fixture changes are needed.
-"""
-
-from agent.agents.{name} import {Name}Deps, {name}_agent
-
-
-async def test_{name}_agent_runs_with_test_model():
-    result = await {name}_agent.run("Smoke test input", deps={Name}Deps())
-    assert result.output is not None
-'''
+# `--prune` keeps the blank example (and the scripts) so agents can still be added.
+PRUNE_KEEP = {"blank"}
+PRUNE_PATHS = [
+    "docs",
+    "mkdocs.yml",
+    ".github/workflows/docs.yml",
+    "tests/test_examples.py",
+    "tests/test_add_agent.py",
+]
 
 
 def to_pascal_case(name: str) -> str:
     return "".join(word.capitalize() for word in name.split("_"))
 
 
-def validate_name(name: str) -> str | None:
-    """Return an error message if name is invalid, else None."""
+# --- Targets and validation ---------------------------------------------------------
+
+
+def targets(root: Path, name: str, example: Example) -> dict[str, Path]:
+    """Every file a new agent adds, so collisions are caught before anything is written."""
+    paths = {
+        "module": root / "agent" / "agents" / f"{name}.py",
+        "test": root / "tests" / f"test_agents_{name}.py",
+        "eval": root / "evals" / f"test_{name}.py",
+        "fixture": root / "evals" / "fixtures" / f"{name}.json",
+    }
+    for prompt in example.prompt_files:
+        paths[f"prompt:{prompt.name}"] = (
+            root / "agent" / "prompts" / prompt_target(prompt.name, example.name, name)
+        )
+    return paths
+
+
+def prompt_target(filename: str, example_name: str, name: str) -> str:
+    """Prompt files are named after their example (`single.txt`, `single_critic.txt`)."""
+    stem = filename.removesuffix(".txt")
+    if stem == example_name or stem.startswith(f"{example_name}_"):
+        return name + stem.removeprefix(example_name) + ".txt"
+    return f"{name}_{stem}.txt"
+
+
+def validate_name(root: Path, name: str, example: Example) -> str | None:
+    """Return an error message if `name` can't be used, else None."""
     if not NAME_RE.match(name):
         return (
             f"'{name}' is not a valid snake_case identifier "
-            "(must start with a lowercase letter, then lowercase letters/digits/underscores)"
+            "(start with a lowercase letter, then lowercase letters, digits or underscores)"
         )
     if keyword.iskeyword(name):
         return f"'{name}' is a Python keyword"
-    if name in RESERVED_NAMES:
-        return f"'{name}' is reserved (collides with the primary-agent wiring or an existing stub)"
-
-    agent_module = AGENTS_DIR / f"{name}.py"
-    prompt_file = PROMPTS_DIR / f"{name}.txt"
-    test_module = TESTS_DIR / f"test_agents_{name}.py"
-    for path in (agent_module, prompt_file, test_module):
+    for path in targets(root, name, example).values():
         if path.exists():
-            return f"{path.relative_to(REPO_ROOT)} already exists"
-
+            return f"{path.relative_to(root)} already exists — pick another --name"
     return None
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("name", help="snake_case name for the new agent, e.g. 'newsletter'")
-    name = parser.parse_args().name
+# --- Rendering ----------------------------------------------------------------------
 
-    error = validate_name(name)
+
+def rename(text: str, example: Example, name: str) -> str:
+    """Apply the example → agent renaming to source text."""
+    if example.templated:
+        # The example's own name is a placeholder token (`blank_agent`, `BlankOutput`).
+        text = text.replace(example.name, name)
+        return text.replace(to_pascal_case(example.name), to_pascal_case(name))
+    # Otherwise only prompt references change; every other symbol keeps its example name,
+    # which is safe because each agent lives in its own module.
+    pattern = re.compile(rf'load_prompt\(\s*"{re.escape(example.name)}((?:_\w+)?)"')
+    return pattern.sub(lambda m: f'load_prompt("{name}{m.group(1)}"', text)
+
+
+def smoke_test_source(example: Example, name: str) -> str:
+    agent, deps = (rename(s, example, name) for s in (example.agent, example.deps))
+    opt_in = bool(example.smoke_tools)
+    imports = ""
+    if opt_in:
+        imports = (
+            "from pydantic_ai.messages import ToolReturnPart\n"
+            "from pydantic_ai.models.test import TestModel\n\n"
+        )
+    body = f'    result = await {agent}.run("Smoke test input", deps={deps}())\n'
+    check = "    assert result.output is not None\n"
+    if opt_in:
+        tools = list(example.smoke_tools)
+        body = (
+            f"    # The safety net calls no tools; this test opts in to the ones below.\n"
+            f"    with {agent}.override(model=TestModel(call_tools={tools!r})):\n"
+            f'        result = await {agent}.run("Smoke test input", deps={deps}())\n'
+        )
+        check += (
+            "    called = {\n"
+            "        part.tool_name\n"
+            "        for message in result.all_messages()\n"
+            "        for part in message.parts\n"
+            "        if isinstance(part, ToolReturnPart)\n"
+            "    }\n"
+            f"    assert {{{', '.join(map(repr, tools))}}} <= called\n"
+        )
+    return (
+        f'"""Smoke test for the {name} agent '
+        f"(scaffolded by scripts/add_agent.py from the {example.name} example).\n\n"
+        "The autouse fixture in tests/conftest.py overrides every Agent under agent.agents\n"
+        "with a TestModel, so this runs with no API key and no cost.\n"
+        '"""\n\n'
+        f"{imports}"
+        f"from agent.agents.{name} import {agent}, {deps}\n\n\n"
+        f"async def test_{name}_runs_with_test_model():\n"
+        f"{body}{check}"
+    )
+
+
+def eval_source(example: Example, name: str) -> str:
+    run = rename(example.run, example, name)
+    return (
+        f'"""Evals for the {name} agent (scaffolded by scripts/add_agent.py).\n\n'
+        "These make real model calls: run with `uv run pytest -m eval` (needs an API key,\n"
+        f"costs money). Grow the dataset by adding cases to evals/fixtures/{name}.json — see\n"
+        'evals/helpers.py for the optional keys that add behavioral checks.\n"""\n\n'
+        "import pytest\n\n"
+        f"from agent.agents.{name} import {run}\n"
+        "from evals.helpers import load_fixtures, output_text, run_fixture_dataset\n"
+        "from evals.judge import judge_response\n\n"
+        f"SMOKE_INPUT = {example.smoke_input!r}\n\n\n"
+        "@pytest.mark.eval\n"
+        f"async def test_{name}_returns_output():\n"
+        f"    output = await {run}(SMOKE_INPUT)\n"
+        "    assert output_text(output)\n\n\n"
+        "@pytest.mark.eval\n"
+        f"async def test_{name}_fixture_dataset():\n"
+        f'    await run_fixture_dataset("{name}", load_fixtures("{name}"), {run})\n\n\n'
+        "@pytest.mark.eval\n"
+        f"async def test_{name}_quality_judge():\n"
+        '    """An LLM judge (AGENT_JUDGE_MODEL) scores the answer against your criteria."""\n'
+        f"    output = await {run}(SMOKE_INPUT)\n"
+        "    verdict = await judge_response(\n"
+        "        task=SMOKE_INPUT,\n"
+        "        response=output_text(output),\n"
+        '        criteria="The response directly and accurately addresses the task.",\n'
+        "        threshold=0.6,\n"
+        "    )\n"
+        "    assert verdict.passed, (\n"
+        '        f"Judge score {verdict.score:.2f} below threshold. Reasoning: {verdict.reasoning}"\n'
+        "    )\n"
+    )
+
+
+def fixture_source(example: Example) -> str:
+    cases = [{"name": "smoke", "inputs": {"user_input": example.smoke_input}}]
+    return json.dumps(cases, indent=2) + "\n"
+
+
+# --- Actions ------------------------------------------------------------------------
+
+
+def add(root: Path, example: Example, name: str, *, install: bool = True) -> list[Path]:
+    """Copy `example` into the project at `root` as agent `name`. Returns the files written."""
+    error = validate_name(root, name, example)
+    if error:
+        raise ValueError(error)
+
+    paths = targets(root, name, example)
+    contents = {
+        "module": rename(example.source.read_text(encoding="utf-8"), example, name),
+        "test": smoke_test_source(example, name),
+        "eval": eval_source(example, name),
+        "fixture": fixture_source(example),
+    }
+    for prompt in example.prompt_files:
+        text = prompt.read_text(encoding="utf-8")
+        contents[f"prompt:{prompt.name}"] = (
+            rename(text, example, name) if example.templated else text
+        )
+
+    for key, path in paths.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents[key], encoding="utf-8")
+
+    written = list(paths.values())
+    format_python([p for p in written if p.suffix == ".py"], root)
+    if install and example.dependencies:
+        subprocess.run(["uv", "add", *example.dependencies], cwd=root, check=False)
+    return written
+
+
+def format_python(files: list[Path], root: Path) -> None:
+    """Sort imports and reformat generated files so they pass the repo's lint and style.
+
+    Hand-formatting a template for every possible identifier length isn't reliable.
+    """
+    ruff = shutil.which("ruff")
+    command = [ruff] if ruff else [sys.executable, "-m", "ruff"]
+    paths = [str(f) for f in files]
+    try:
+        subprocess.run(
+            [*command, "check", "--select", "I", "--fix", "--quiet", *paths],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run([*command, "format", *paths], cwd=root, check=True, capture_output=True)
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(f"warning: could not auto-format generated files with ruff ({exc})", file=sys.stderr)
+        print("  run `uv run ruff check --fix . && uv run ruff format .` manually", file=sys.stderr)
+
+
+def prune_targets(root: Path) -> list[Path]:
+    found = [
+        d
+        for d in sorted((root / "examples").glob("*/"))
+        if d.is_dir() and (d / "example.toml").exists() and d.name not in PRUNE_KEEP
+    ]
+    found += [root / p for p in PRUNE_PATHS if (root / p).exists()]
+    return found
+
+
+def prune(root: Path) -> None:
+    for path in prune_targets(root):
+        shutil.rmtree(path) if path.is_dir() else path.unlink()
+
+
+# --- CLI ----------------------------------------------------------------------------
+
+
+def choose_example(examples: list[Example]) -> Example:
+    print("Which pattern?\n")
+    for i, e in enumerate(examples, 1):
+        print(f"  {i:>2}. {e.name:<16} {e.summary}")
+    while True:
+        answer = input("\nNumber or name: ").strip()
+        for i, e in enumerate(examples, 1):
+            if answer in (str(i), e.name):
+                return e
+        print(f"  '{answer}' isn't on the list.")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("example", nargs="?", help="example to copy (omit for a menu)")
+    parser.add_argument("--name", help="snake_case name for the new agent (default: the example)")
+    parser.add_argument(
+        "--no-install", action="store_true", help="skip `uv add` for the example's dependencies"
+    )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="delete the examples (except blank), docs and their tests",
+    )
+    parser.add_argument("--yes", action="store_true", help="don't ask before pruning")
+    args = parser.parse_args(argv)
+    interactive = sys.stdin.isatty()
+
+    if args.prune:
+        if args.example or args.name:
+            parser.error("--prune takes no example or --name")
+        doomed = prune_targets(REPO_ROOT)
+        if not doomed:
+            print("Nothing to prune.")
+            return 0
+        print("This will delete:")
+        for path in doomed:
+            print(f"  {path.relative_to(REPO_ROOT)}")
+        if not args.yes:
+            if not interactive:
+                print("error: refusing to prune non-interactively without --yes", file=sys.stderr)
+                return 1
+            if input("Delete these? [y/N] ").strip().lower() != "y":
+                print("Aborted.")
+                return 1
+        prune(REPO_ROOT)
+        print("Pruned. `blank` is kept so you can still add agents.")
+        return 0
+
+    try:
+        examples = discover(REPO_ROOT / "examples")
+    except ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if not examples:
+        print("error: no examples found under examples/", file=sys.stderr)
+        return 1
+
+    by_name = {e.name: e for e in examples}
+    if args.example:
+        if args.example not in by_name:
+            print(f"error: unknown example '{args.example}'", file=sys.stderr)
+            print(f"available: {', '.join(by_name)}", file=sys.stderr)
+            return 1
+        example = by_name[args.example]
+    elif interactive:
+        example = choose_example(examples)
+    else:
+        print("error: name an example, e.g. `add_agent.py supervisor`", file=sys.stderr)
+        print(f"available: {', '.join(by_name)}", file=sys.stderr)
+        return 1
+
+    name = args.name
+    if not name:
+        name = input(f"Name for the agent [{example.name}]: ").strip() if interactive else ""
+        name = name or example.name
+
+    error = validate_name(REPO_ROOT, name, example)
     if error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    pascal_name = to_pascal_case(name)
-    context = {"name": name, "Name": pascal_name}
+    written = add(REPO_ROOT, example, name, install=not args.no_install)
+    for path in written:
+        print(f"Created {path.relative_to(REPO_ROOT)}")
 
-    agent_module = AGENTS_DIR / f"{name}.py"
-    prompt_file = PROMPTS_DIR / f"{name}.txt"
-    test_module = TESTS_DIR / f"test_agents_{name}.py"
-
-    agent_module.write_text(AGENT_MODULE_TEMPLATE.format(**context), encoding="utf-8")
-    print(f"Created {agent_module.relative_to(REPO_ROOT)}")
-
-    prompt_file.write_text(PROMPT_TEMPLATE.format(**context), encoding="utf-8")
-    print(f"Created {prompt_file.relative_to(REPO_ROOT)}")
-
-    test_module.write_text(TEST_MODULE_TEMPLATE.format(**context), encoding="utf-8")
-    print(f"Created {test_module.relative_to(REPO_ROOT)}")
-
-    # Reformat the generated Python files with ruff so line-wrapping matches
-    # repo style regardless of how long `name` is — hand-formatting a
-    # template for every possible identifier length isn't reliable.
-    try:
-        subprocess.run(
-            ["ruff", "format", str(agent_module), str(test_module)],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        print(f"warning: could not auto-format generated files with ruff ({exc})", file=sys.stderr)
-        print("  run `uv run ruff format .` manually", file=sys.stderr)
-
+    agent = rename(example.agent, example, name)
+    print(f"\nDone — the {name} agent is in agent/agents/{name}.py. Import it directly:")
+    print(f"    from agent.agents.{name} import {agent}\n")
+    if example.dependencies and args.no_install:
+        print(f"Install its dependencies: uv add {' '.join(example.dependencies)}")
+    if example.env:
+        print(f"Set in .env: {', '.join(example.env)}")
+    if example.services:
+        print(f"Needs running: {', '.join(example.services)}")
     print(
-        f"\nDone — the {name} agent is scaffolded as an independent module.\n"
-        f"agent/agents/__init__.py was NOT touched; import this agent directly:\n"
-        f"    from agent.agents.{name} import "
-        f"{pascal_name}Deps, {pascal_name}Output, {name}_agent, run_{name}_agent\n\n"
-        f"Next steps:\n"
-        f"  1. Edit agent/agents/{name}.py's output schema and agent/prompts/{name}.txt\n"
-        f"  2. uv run pytest  (runs the new smoke test under TestModel, no API key needed)\n"
+        "Next steps:\n"
+        f"  1. Edit agent/agents/{name}.py and its prompt(s) in agent/prompts/\n"
+        "  2. uv run pytest             (smoke test, no API key needed)\n"
+        "  3. uv run pytest -m eval     (real model calls)"
     )
     return 0
 

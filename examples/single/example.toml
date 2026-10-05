@@ -1,0 +1,9 @@
+title = "Single agent"
+pattern = "single"
+summary = "One agent handles the whole task, with structured output and a prompt file."
+smoke_input = "Hello, what can you do?"
+
+[entrypoint]
+agent = "agent"
+deps = "AgentDeps"
+run = "run_agent"

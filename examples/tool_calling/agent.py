@@ -51,8 +51,8 @@ class ToolAgentDeps:
 
 # --- Output type ---
 class ToolAgentOutput(BaseModel):
-    # `result` is the canonical output field shared by all three stubs —
-    # keep it (or rename it consistently) so evals/ stays pattern-agnostic.
+    # `result` is the conventional output field in these examples; the generated
+    # eval starter reads it when present (see evals/helpers.py).
     result: str
     # Pydantic deep-copies mutable defaults, so a plain [] is safe here.
     # Do NOT use dataclasses.field() inside a BaseModel — it is not a

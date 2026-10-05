@@ -31,42 +31,33 @@ match the house style unless the user explicitly asks for something else.
 
 ## Before you start
 
-1. **A pattern must already be chosen.** Check `ls agent/agents/*.py` — if
-   you see all three of `single.py`, `supervisor.py`, `tool_calling.py`, a
-   pattern hasn't been picked yet. Run
-   `uv run python scripts/choose_pattern.py {single|supervisor|tool_calling}`
-   first (ask the user which, if unclear). Building the UI against
-   `agent.agents`' canonical names works regardless of pattern, but do this
-   first anyway — it's a prerequisite of the template itself, and doing it
-   after hand-editing `agent/agents/__init__.py` (step 2 below) will fail the
-   script's exact-match check.
+1. **An agent must already exist, and you must know which one the UI serves.**
+   Check `ls agent/agents/*.py`. The template ships with no agents; if there
+   are none, run `uv run python scripts/add_agent.py` first (ask the user
+   which pattern, if unclear). Every agent is its own module, so with several
+   agents ask which one the UI should serve. Everything below uses
+   `agent.agents.<your_agent>` as a stand-in for that module.
 
-2. **Export `USAGE_LIMITS` alongside the other canonical names.** Every
-   stub defines a module-level `USAGE_LIMITS` constant, but
-   `agent/agents/__init__.py` only re-exports `AgentDeps`, `AgentOutput`,
-   `agent`, `run_agent` today. The UI needs `agent.run()` directly (not the
-   `run_agent()` helper — it doesn't accept `message_history=`, which
-   multi-turn chat needs), so it needs `USAGE_LIMITS` too, or every chat
-   turn runs unbounded, silently dropping the guardrail AGENTS.md calls out
-   as load-bearing. Add it to the existing import line and `__all__`, e.g.
-   for the single-agent pattern:
+2. **Find the three names the UI needs from that module** — the agent
+   instance, its deps dataclass, and `USAGE_LIMITS`. They are named by the
+   example the agent came from (`supervisor_agent` / `SharedDeps`,
+   `tool_agent` / `ToolAgentDeps`, `agent` / `AgentDeps`, or
+   `<name>_agent` / `<Name>Deps` for a blank agent); read the module to
+   confirm. The UI needs `agent.run()` directly (not the `run_*()` helper —
+   it doesn't accept `message_history=`, which multi-turn chat needs), plus
+   `USAGE_LIMITS`, or every chat turn runs unbounded, silently dropping the
+   guardrail AGENTS.md calls out as load-bearing. The chat router imports
+   them with aliases so the rest of the file stays generic:
 
    ```python
-   from agent.agents.single import USAGE_LIMITS, AgentDeps, AgentOutput, agent, run_agent
-
-   __all__ = ["USAGE_LIMITS", "AgentDeps", "AgentOutput", "agent", "run_agent"]
+   from agent.agents.triage import USAGE_LIMITS, SharedDeps as AgentDeps, supervisor_agent as agent
    ```
 
-   This is safe to hand-edit at this point — `choose_pattern.py` won't run
-   again once the other two stubs are deleted (it exits early with "already
-   chosen" otherwise).
-
-3. **Check the output type's `result` field.** Every stub's output model
-   keeps a `result: str` field by convention (see AGENTS.md's "Making it
-   yours" section). The chat router below reads `result.output.result`
-   directly — if the field was renamed, either rename it back, adjust the
-   router, or confirm `output_type=str` (in which case the router's
-   `hasattr` fallback handles it already).
+3. **Check the output type's `result` field.** The examples' output models
+   keep a `result: str` field by convention. The chat router below reads
+   `result.output.result` directly — if the field was renamed, either rename
+   it back, adjust the router, or confirm `output_type=str` (in which case
+   the router's `hasattr` fallback handles it already).
 
 ## What to build
 
@@ -92,8 +83,8 @@ web/
 Copy the files as-is first, then adapt:
 
 - **`session.py`**: usually needs no changes — it's deliberately generic.
-- **`routers/chat.py`**: adjust the `deps=AgentDeps()` call if your `AgentDeps`
-  dataclass has required fields (the default stub has none).
+- **`routers/chat.py`**: point the `agent.agents.<your_agent>` import at your agent (see "Before you start"), and adjust the `deps=AgentDeps()` call if your `AgentDeps`
+  dataclass has required fields (the example agents have none).
 - **`templates/base.html`**: add sidebar nav links here as you add more pages
   (a settings page, a session list, a status dashboard — whatever the agent
   needs beyond chat).

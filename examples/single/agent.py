@@ -70,7 +70,7 @@ agent: Agent[AgentDeps, AgentOutput] = Agent(
     # Fail fast when the provider filters a response, instead of retrying a
     # refused request or returning partial text.
     capabilities=[RaiseContentFilterError()],
-    instructions=load_prompt("system"),  # loads agent/prompts/system.txt
+    instructions=load_prompt("single"),  # prompts/single.txt; copied to agent/prompts/<name>.txt
     # Or inline: instructions="You are a helpful assistant."
 )
 

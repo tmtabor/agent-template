@@ -5,15 +5,13 @@ empty — partial or refusal text would be retried (structured output) or
 returned as if complete. The contrast test below pins that default.
 """
 
-import importlib
-
 import pytest
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ContentFilterError
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models.function import FunctionModel
 
-from tests.test_stubs import STUBS
+from tests.examples_support import example_ids, import_example
 
 
 def _filtered(messages, info) -> ModelResponse:
@@ -24,17 +22,11 @@ def _filtered(messages, info) -> ModelResponse:
     )
 
 
-@pytest.mark.parametrize(("module_path", "agent_attr", "deps_attr"), STUBS)
-async def test_stub_raises_on_content_filtered_response(
-    module_path: str, agent_attr: str, deps_attr: str
-):
-    try:
-        module = importlib.import_module(module_path)
-    except ModuleNotFoundError:
-        pytest.skip(f"{module_path} stub was removed by choose_pattern.py")
-
-    main_agent = getattr(module, agent_attr)
-    deps = getattr(module, deps_attr)()
+@pytest.mark.parametrize("example", example_ids())
+async def test_example_raises_on_content_filtered_response(example):
+    module = import_example(example)
+    main_agent = getattr(module, example.agent)
+    deps = getattr(module, example.deps)()
     with (
         main_agent.override(model=FunctionModel(_filtered)),
         pytest.raises(ContentFilterError, match="content_filter"),

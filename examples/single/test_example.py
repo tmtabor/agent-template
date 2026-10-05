@@ -1,5 +1,8 @@
 """Example unit tests using TestModel — no API calls, no cost.
 
+This file stays with the `single` example (add_agent.py does not copy it); it is a
+recipe for testing your own agent.
+
 TestModel simulates agent behavior for fast, deterministic unit tests.
 Import it from: from pydantic_ai.models.test import TestModel
 
@@ -10,7 +13,7 @@ tests/test_safety_net.py for opting in to a tool call.
 
 from pydantic_ai.models.test import TestModel
 
-from agent.agents import AgentDeps, agent
+from examples.single.agent import AgentDeps, agent
 
 
 async def test_agent_runs_with_test_model():

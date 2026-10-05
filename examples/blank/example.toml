@@ -1,0 +1,10 @@
+title = "Blank"
+pattern = "blank"
+summary = "An empty agent: one output type, one prompt, no tools. Start here and build from scratch."
+smoke_input = "Hello, what can you do?"
+templated = true  # `blank` / `Blank` in the source are replaced by the name you choose
+
+[entrypoint]
+agent = "blank_agent"
+deps = "BlankDeps"
+run = "run_blank_agent"

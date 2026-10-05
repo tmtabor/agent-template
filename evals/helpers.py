@@ -1,12 +1,17 @@
-"""Pass/fail eval examples using pydantic_evals.
+"""Shared helpers for the eval starters that `scripts/add_agent.py` generates.
 
-These evals test for specific, verifiable outputs.
-Run with: uv run pytest -m eval
+Each agent's evals/test_<name>.py is a thin file over these, so the evaluators and
+budgets live in one place. Run evals with: uv run pytest -m eval
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
-import pytest
+import json
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import (
     ArgumentCorrectness,
@@ -18,25 +23,26 @@ from pydantic_evals.evaluators import (
     TrajectoryMatch,
 )
 
-from agent.agents import run_agent
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+# Behavioral budgets, applied to every case. These are span-based evaluators:
+# they grade how the agent got to its answer, not just the answer, and need
+# the Logfire/OpenTelemetry setup in evals/conftest.py to capture spans (without
+# spans they fail with a "no span tree" reason). Keep them comfortably below the
+# agent's USAGE_LIMITS.request_limit — a run that merely scrapes under the hard
+# limit is still a looping run.
+MAX_MODEL_REQUESTS = 5
+MAX_TOOL_CALLS = 4
 
 
-@pytest.mark.eval
-async def test_agent_returns_output():
-    """Basic smoke test: agent runs without error and returns output."""
-    output = await run_agent("Say hello.")
-    assert output is not None
-    assert output.result  # non-empty result
+def output_text(output: Any) -> str:
+    """The agent's answer as text: its `result` field if it has one, else str(output)."""
+    return str(output.result) if hasattr(output, "result") else str(output)
 
 
-@pytest.mark.eval
-async def test_agent_handles_empty_ish_input():
-    """Agent should handle minimal input gracefully."""
-    output = await run_agent("Hi.")
-    assert output is not None
-
-
-# --- Dataset eval driven by evals/fixtures/example.json ---
+def load_fixtures(name: str) -> list[dict]:
+    """Load evals/fixtures/<name>.json."""
+    return json.loads((FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
 @dataclass
@@ -52,17 +58,7 @@ class ContainsExpected(Evaluator[str, str]):
         return ctx.expected_output.lower() in ctx.output.lower()
 
 
-# Behavioral budgets, applied to every case. These are span-based evaluators:
-# they grade how the agent got to its answer, not just the answer, and need
-# the Logfire/OpenTelemetry setup in evals/conftest.py to capture spans (without
-# spans they fail with a "no span tree" reason). Keep them comfortably below
-# the stub's USAGE_LIMITS.request_limit — a run that merely scrapes under the
-# hard limit is still a looping run.
-MAX_MODEL_REQUESTS = 5
-MAX_TOOL_CALLS = 4
-
-
-def _case_evaluators(fixture: dict) -> list[Evaluator]:
+def case_evaluators(fixture: dict) -> list[Evaluator]:
     """Build optional per-case behavioral evaluators from a fixture's keys.
 
     - expected_tools: ["a", "b"]   -> exactly these tools were called (any order)
@@ -82,27 +78,25 @@ def _case_evaluators(fixture: dict) -> list[Evaluator]:
     return evaluators
 
 
-@pytest.mark.eval
-async def test_fixture_dataset(example_fixtures: list[dict]):
-    """Run every case in evals/fixtures/example.json through the agent.
+async def run_fixture_dataset(
+    name: str, fixtures: list[dict], run: Callable[[str], Awaitable[Any]]
+) -> None:
+    """Run every fixture case through `run` and assert they all pass.
 
-    Add cases to that JSON file to grow this eval — no code changes needed
-    unless a case requires a new kind of check, in which case add an
-    Evaluator like ContainsExpected above. Tool-using agents can add the
-    optional expected_tools / expected_trajectory / expected_arguments keys
-    to a fixture (see _case_evaluators).
+    Add cases to the JSON file to grow the eval — no code changes needed unless a case
+    requires a new kind of check, in which case add an Evaluator like ContainsExpected.
     """
     dataset = Dataset(
-        name="example",
+        name=name,
         cases=[
             Case(
                 name=fixture["name"],
                 inputs=fixture["inputs"]["user_input"],
                 expected_output=fixture.get("expected_output"),
                 metadata=fixture.get("metadata"),
-                evaluators=_case_evaluators(fixture),
+                evaluators=case_evaluators(fixture),
             )
-            for fixture in example_fixtures
+            for fixture in fixtures
         ],
         evaluators=[
             ContainsExpected(),
@@ -112,8 +106,7 @@ async def test_fixture_dataset(example_fixtures: list[dict]):
     )
 
     async def task(user_input: str) -> str:
-        output = await run_agent(user_input)
-        return output.result
+        return output_text(await run(user_input))
 
     report = await dataset.evaluate(task)
     report.print(include_input=True, include_output=True)

@@ -1,0 +1,9 @@
+title = "Tool-calling agent"
+pattern = "tool_calling"
+summary = "An agent that calls tools against external systems, with the three-outcome error convention."
+smoke_input = "What can you find out about Python 3.13?"
+
+[entrypoint]
+agent = "tool_agent"
+deps = "ToolAgentDeps"
+run = "run_tool_agent"

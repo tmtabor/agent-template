@@ -3,8 +3,8 @@
 The default chat pattern in `SKILL.md` calls `agent.run()` and swaps in the
 full reply once it's ready — HTMX shows a spinner while the request is in
 flight (see `.htmx-request .spinner` in `app.css`). This works for *any*
-`output_type`, including the structured `AgentOutput` models this template's
-stubs use by default, and it's the right default: it's simpler, has fewer
+`output_type`, including the structured output models this template's
+examples use by default, and it's the right default: it's simpler, has fewer
 moving parts, and doesn't force a choice on output type.
 
 Reach for real token streaming only when the user specifically wants the
@@ -19,7 +19,7 @@ trade-off rather than defaulting to it: streaming only works cleanly when
 
 `agent.run_stream()` + `stream_text(delta=True)` yields plain text deltas.
 That's a natural fit when the agent's `output_type` is `str`. But this
-template's stubs default to a structured `AgentOutput` (with a `result: str`
+template's examples default to a structured output model (with a `result: str`
 field) produced via tool-call-style structured output — there's no plain
 text delta stream to read from in that case. Either:
 
@@ -42,7 +42,8 @@ import asyncio
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from agent.agents import USAGE_LIMITS, AgentDeps, agent
+# Aliased from your agent's module, as in routers/chat.py
+from agent.agents.triage import USAGE_LIMITS, SharedDeps as AgentDeps, supervisor_agent as agent
 from web.session import get_or_create_session
 
 router = APIRouter()

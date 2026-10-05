@@ -1,0 +1,10 @@
+title = "Supervisor / workers"
+pattern = "supervisor"
+summary = "A supervisor delegates to specialized worker agents and synthesizes their results."
+smoke_input = "Complete this complex task: summarize the benefits of unit tests."
+smoke_tools = ["delegate_to_worker_a"]  # opted in to during the offline smoke test
+
+[entrypoint]
+agent = "supervisor_agent"
+deps = "SharedDeps"
+run = "run_supervisor"

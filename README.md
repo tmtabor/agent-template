@@ -21,9 +21,9 @@ uvx library-skills install --all --claude
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
 
-# Pick an agent pattern (single / supervisor / tool_calling) — deletes the
-# other stubs and rewires imports; see "Agent patterns" below
-uv run python scripts/choose_pattern.py single
+# Add an agent: pick a pattern from the menu (or name one, e.g.
+# `add_agent.py supervisor --name triage`); see "Agents" below
+uv run python scripts/add_agent.py
 
 # Run unit tests (no API calls, no API key needed)
 uv run pytest
@@ -42,22 +42,19 @@ uv run ruff format .
 
 ```
 agent/
-├── config.py         # Settings — validates the AGENT_MODEL provider at import time (raises if misconfigured)
-├── logging.py         # Logfire setup — configure_logging(), get_logger()
-├── agents/            # Three interchangeable stubs — pick one with scripts/choose_pattern.py
-│   ├── __init__.py     #   canonical names (run_agent, AgentOutput, …) re-exported from the chosen stub
-│   ├── single.py       #   one agent, one task (the default)
-│   ├── supervisor.py    #   supervisor delegates to specialized workers
-│   └── tool_calling.py  #   agent with tools that call external systems
-├── tools/example.py   # Canonical tool pattern — copy and adapt
+├── config.py          # Settings — validates the AGENT_MODEL provider at import time (raises if misconfigured)
+├── logging.py          # Logfire setup — configure_logging(), get_logger()
+├── agents/             # YOUR agents, one module each — empty until you run add_agent.py
+├── tools/example.py    # Canonical tool pattern — copy and adapt
 └── prompts/
-    ├── system.txt       # Default system prompt — edit this first
+    ├── <name>.txt       # One prompt per agent, written by add_agent.py
     └── templates.py      # load_prompt() loader
 
-scripts/choose_pattern.py   # Pick an agent pattern — deletes the other stubs, rewires imports
-scripts/add_agent.py        # Scaffold an additional, independent agent — see "Multiple agents" below
+examples/               # The pattern library: blank, single, supervisor, tool_calling, …
+└── <pattern>/           #   agent.py, prompts/, example.toml, README.md
+scripts/add_agent.py     # Add an agent from an example pattern — see "Agents" below
 tests/    # Unit tests against TestModel — no API calls, no API key needed
-evals/    # Pass/fail + dataset + LLM-as-judge evals — real API calls, run with -m eval
+evals/    # Per-agent eval starters + shared helpers — real API calls, run with -m eval
 .github/workflows/ci.yml    # CI: ruff check, format check, unit tests (no secrets needed)
 ```
 
@@ -80,75 +77,56 @@ standard names because the provider SDKs read those exact variables directly.
 | `AGENT_LOG_CONTENT` | `true` | Whether traces include prompts, model outputs and tool arguments. Set `false` in production if they may be sensitive. Evals force it on, since `ArgumentCorrectness` reads tool arguments from spans. |
 | `AGENT_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 
-## Agent patterns
+## Agents
 
-Three stubs are provided — pick one:
-
-- `agent/agents/single.py` — one agent, one task
-- `agent/agents/supervisor.py` — supervisor delegates to specialized workers
-- `agent/agents/tool_calling.py` — agent with tools that call external systems
+The template starts with **no agents**. When you want one, run `add_agent.py`
+and pick a pattern from the menu; run it again for each further agent, each
+with whatever pattern suits it.
 
 ```bash
-uv run python scripts/choose_pattern.py tool_calling   # or single / supervisor
+uv run python scripts/add_agent.py                       # interactive menu
+uv run python scripts/add_agent.py supervisor --name triage
+uv run python scripts/add_agent.py blank --name newsletter
 ```
 
-The script deletes the other two stubs and rewires the canonical import in
-`agent/agents/__init__.py`. `tests/` and `evals/` import `run_agent`,
-`AgentOutput`, `AgentDeps`, and `agent` from that package — never from a stub
-module directly — so they keep passing with zero manual edits no matter which
-pattern you choose. Run it once, right after cloning.
+The patterns live in [`examples/`](examples/) — each is a folder with the agent's source,
+its prompt, a README and an `example.toml`:
 
-## Multiple agents
+| Example | Pattern |
+|---|---|
+| `blank` | An empty agent: one output type, one prompt, no tools |
+| `single` | One agent handles the whole task |
+| `supervisor` | A supervisor delegates to specialized workers |
+| `tool_calling` | An agent whose tools call external systems |
 
-The pattern above is for the app's one *primary* agent. Some apps
-legitimately need several independent, differently-shaped agents instead —
-e.g. a content-generation app with a "newsletter" agent and a "bluesky_post"
-agent, each with its own output schema and instructions, with no shared "one
-true agent" identity. That's different from `supervisor.py`: a supervisor
-delegating to workers it controls is still one agent from the outside.
-Reach for multiple agents when, say, a UI lets a user pick between several
-unrelated agents.
+For each agent, `add_agent.py`:
 
-Scaffold one with:
+- copies the example's module to `agent/agents/<name>.py` and its prompt to
+  `agent/prompts/<name>.txt` (only `blank` renames its symbols; the others keep
+  theirs, which is safe because each agent lives in its own module),
+- scaffolds a smoke test, `tests/test_agents_<name>.py` (runs under `TestModel`, no API key),
+- scaffolds an eval starter, `evals/test_<name>.py`, with a fixture file at
+  `evals/fixtures/<name>.json`,
+- runs `uv add` for any extra dependencies the example declares, and tells you about any
+  environment variables or services it needs.
 
-```bash
-uv run python scripts/add_agent.py newsletter
-```
-
-This creates `agent/agents/newsletter.py`, `agent/prompts/newsletter.txt`,
-and a smoke test — modeled on the same conventions as the pattern stubs —
-without touching `agent/agents/__init__.py`. The canonical re-export there
-(`run_agent`, `AgentOutput`, `AgentDeps`, `agent`) stays reserved for the one
-primary agent chosen by `choose_pattern.py`. Import each additional agent
-directly from its own module wherever you use it:
+There is no shared "primary" agent. Import each agent directly from its own module:
 
 ```python
-from agent.agents.newsletter import (
-    NewsletterDeps,
-    NewsletterOutput,
-    newsletter_agent,
-    run_newsletter_agent,
-)
+from agent.agents.triage import SharedDeps, run_supervisor
 ```
 
-A few things this doesn't automate:
-
-- **Evals** are global today — `evals/test_pass_fail.py` and
-  `evals/test_llm_judge.py` both import only the canonical `run_agent`. To
-  evaluate an additional agent, copy `evals/fixtures/example.json` to
-  `evals/fixtures/newsletter.json` and adapt the two eval files' pattern
-  into new files that import `run_newsletter_agent`.
-- **The `agent-web-ui` skill** wires its `chat.py` to the canonical
-  `from agent.agents import ...` export only. To build a UI over an
-  additional agent, point that one import line at the new module instead.
+Once you've picked what you need, `uv run python scripts/add_agent.py --prune` removes the
+other examples (keeping `blank`), the docs and their tests. Nothing under `agent/` or `evals/`
+depends on `examples/`.
 
 ## Usage limits
 
-Each stub defines a `USAGE_LIMITS` constant passed to every run — a guardrail
+Each agent defines a `USAGE_LIMITS` constant passed to every run — a guardrail
 against runaway agentic loops. `request_limit` caps model round-trips (each
 tool-call iteration is one request); `total_tokens_limit` caps overall tokens. An optional spend cap in USD comes from `AGENT_COST_LIMIT` (off by default).
 Exceeding any of them raises `UsageLimitExceeded` instead of silently burning
-tokens. Tune the values in your chosen stub to fit your task; the supervisor
+tokens. Tune the values in your agent module to fit your task; the supervisor
 shares its budget with its workers so the limit bounds the whole delegation
 tree.
 
@@ -161,20 +139,22 @@ response the provider filters (safety block or refusal) raises
 from pydantic_ai.exceptions import ContentFilterError
 
 try:
-    output = await run_agent(user_input)
+    output = await run_supervisor(user_input)  # whichever run_* your agent has
 except ContentFilterError as e:
     ...  # e.message has the reason; e.body has the filtered response
 ```
 
 ## Adding tools
 
-Copy `agent/tools/example.py`, implement your tool, register with `@agent.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param), and `ToolFailed` for expected failures it can't fix but can work around (not found, unsupported) — log and re-raise everything else.
+Copy `agent/tools/example.py`, implement your tool, register with `@<your_agent>.tool`. Use `ModelRetry` only for errors the LLM can fix by changing its input (bad query, out-of-range param), and `ToolFailed` for expected failures it can't fix but can work around (not found, unsupported) — log and re-raise everything else.
 
 Unit tests don't run your tools by default: the `TestModel` safety net in `tests/conftest.py` calls none (a default `TestModel` calls every tool with junk arguments, which breaks tools that validate input and really runs ones with side effects). Test tool logic by calling the function directly, as `tests/test_tools.py` does, and opt in to an end-to-end call (recipe in `tests/test_safety_net.py`) with `TestModel(call_tools=["your_tool"])`.
 
 ## Customizing the prompt
 
-Edit `agent/prompts/system.txt`. It's loaded via `load_prompt("system")` in `agent/prompts/templates.py`; add more `.txt` files in the same directory and load them the same way.
+Each agent's prompt is `agent/prompts/<name>.txt`, loaded via `load_prompt("<name>")` in
+`agent/prompts/templates.py`; add more `.txt` files in the same directory and load them the
+same way.
 
 ## Observability
 
@@ -184,19 +164,22 @@ console output is controlled by `LOGFIRE_TOKEN`, see Configuration above.
 
 ## Evals
 
-- Pass/fail evals: `evals/test_pass_fail.py` — includes a `pydantic_evals`
-  Dataset eval driven by `evals/fixtures/example.json`. Add cases to that JSON
-  file to grow the eval; no code changes needed unless a case requires a new
-  kind of check (then add an `Evaluator` alongside `ContainsExpected`).
-  Every case is also checked against behavioral budgets (`MaxModelRequests`,
-  `MaxToolCalls`) read from the run's OpenTelemetry spans, so it grades how the
-  agent got its answer, not just the answer. Tool-using agents can add optional
-  keys to a fixture: `expected_tools` (`["a", "b"]`, any order),
-  `expected_trajectory` (ordered tool names, scored by F1) and
-  `expected_arguments` (`{"tool": "a", "args": {"q": "x"}}`).
-- LLM-as-judge evals: `evals/test_llm_judge.py` — graded by `JUDGE_MODEL`, see Configuration above
+Each agent gets its own eval starter, `evals/test_<name>.py`, from `add_agent.py`:
 
-Both files share the same `@pytest.mark.eval` marker — there's no separate marker for the LLM-judge subset. `uv run pytest -m eval` runs all of them and requires a real API key; the LLM-judge evals also cost money (they make an extra model call per test to grade the output).
+- A smoke eval, and a **dataset eval** driven by `evals/fixtures/<name>.json` (a
+  `pydantic_evals` `Dataset`). Add cases to that JSON file to grow the eval; no code changes
+  needed unless a case requires a new kind of check (then add an `Evaluator` alongside
+  `ContainsExpected` in `evals/helpers.py`). Every case is also checked against behavioral
+  budgets (`MaxModelRequests`, `MaxToolCalls`) read from the run's OpenTelemetry spans, so it
+  grades how the agent got its answer, not just the answer. Tool-using agents can add optional
+  keys to a fixture: `expected_tools` (`["a", "b"]`, any order), `expected_trajectory`
+  (ordered tool names, scored by F1) and `expected_arguments`
+  (`{"tool": "a", "args": {"q": "x"}}`).
+- An **LLM-as-judge eval**, graded by `AGENT_JUDGE_MODEL` (see Configuration above); edit its criteria.
+
+The shared evaluators and runner live in `evals/helpers.py`; the judge in `evals/judge.py`.
+
+All of these share the same `@pytest.mark.eval` marker — there's no separate marker for the LLM-judge subset. `uv run pytest -m eval` runs all of them and requires a real API key; the LLM-judge evals also cost money (they make an extra model call per test to grade the output).
 
 ## License
 

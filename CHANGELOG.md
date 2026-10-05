@@ -7,6 +7,48 @@ have cloned the template: what changed, and whether you need to do anything.
 
 ## [Unreleased]
 
+### Upgrade notes
+- **The template no longer ships an agent.** `agent/agents/` is empty and there is no
+  canonical `run_agent` / `AgentOutput` / `AgentDeps` / `agent` re-export. Run
+  `uv run python scripts/add_agent.py` (once per agent) and import each agent from its own
+  module, e.g. `from agent.agents.triage import ...`. Code importing the canonical names from
+  `agent.agents` must change.
+- **`scripts/choose_pattern.py` is gone.** `add_agent.py` replaces it and the old
+  `add_agent.py <name>` scaffold: `add_agent.py supervisor --name triage`, or
+  `add_agent.py blank --name newsletter` for what the old script produced. Existing clones are
+  unaffected until you pull this change; if you already chose a pattern, your agent keeps
+  working but `agent/agents/__init__.py` no longer needs the canonical import.
+- **`evals/test_pass_fail.py`, `evals/test_llm_judge.py` and `evals/fixtures/example.json` are
+  removed.** Each agent now gets `evals/test_<name>.py` and `evals/fixtures/<name>.json` from
+  `add_agent.py`; the shared evaluators moved to `evals/helpers.py`. Copy your fixtures to the
+  new file name.
+- **`agent/prompts/system.txt` is gone.** Each agent has `agent/prompts/<name>.txt`.
+- **The `agent-web-ui` skill's `chat.py` imports one agent module** you point it at (see the
+  skill's "Before you start"), instead of the canonical names.
+
+### Added
+- `examples/`: a library of example agents (`blank`, `single`, `supervisor`,
+  `tool_calling`), each with source, prompt, README and an `example.toml` manifest.
+- `scripts/add_agent.py` is now the one way to add an agent: an interactive menu of patterns
+  (or `add_agent.py <example> --name <name>`) that copies the example, its prompt, and
+  scaffolds a smoke test and an eval starter. `--prune` removes the examples you don't need.
+- Tests parametrized over every example (`tests/test_examples.py`, content-filter and
+  cost-limit tests), and `tests/test_add_agent.py`, which runs the real script into a scratch
+  copy of the repo and checks that what it generates imports, passes its own smoke test and
+  lint, and has collectable evals.
+- `evals/helpers.py`: shared eval evaluators, fixture loader and dataset runner.
+- `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
+
+### Changed
+- The three pattern stubs moved from `agent/agents/` to `examples/` and are copied into your
+  project on demand; the unit-test safety net now also covers `examples/`.
+- `tests/test_safety_net.py` and the `TestModel` recipe (`examples/single/test_example.py`)
+  no longer depend on a chosen agent.
+
+### Removed
+- `scripts/choose_pattern.py`, the canonical re-export in `agent/agents/__init__.py`, and
+  `tests/test_stubs.py` (replaced by `tests/test_examples.py`).
+
 ## [0.2.0] - 2026-10-04
 
 ### Upgrade notes

@@ -1,10 +1,9 @@
 """Chat endpoints: render the page, then handle each turn via an HTMX partial swap.
 
-Imports the canonical `agent`, `AgentDeps`, `USAGE_LIMITS` names from
-`agent.agents` rather than a concrete stub module — this keeps working
-regardless of which pattern `scripts/choose_pattern.py` picked. USAGE_LIMITS
-isn't re-exported by default; add it alongside the other four names in
-agent/agents/__init__.py (see SKILL.md step 2) before this import works.
+Serves ONE agent. The template has no canonical agent, so point the import
+below at the module of the agent this UI should serve (see SKILL.md, "Before
+you start"). It is aliased to the generic names `agent`, `AgentDeps` and
+`USAGE_LIMITS` so the rest of this file never changes.
 
 Uses agent.run() directly instead of the higher-level run_agent() helper
 because run_agent() doesn't accept message_history= — multi-turn chat needs
@@ -17,7 +16,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic_ai import UsageLimitExceeded
 from pydantic_ai.exceptions import ContentFilterError
 
-from agent.agents import USAGE_LIMITS, AgentDeps, agent
+# TODO: replace `triage` and the names with the agent this UI serves.
+from agent.agents.triage import USAGE_LIMITS, SharedDeps as AgentDeps, supervisor_agent as agent
 from agent.logging import get_logger
 from web.session import attach_session_cookie, get_or_create_session
 
@@ -92,7 +92,7 @@ async def chat(request: Request, message: str = Form(...)) -> HTMLResponse:
 
     session.history = result.all_messages()
 
-    # Every stub's output type keeps a `result: str` field by convention (see
+    # The example agents' output types keep a `result: str` field by convention (see
     # AGENTS.md's "Making it yours" section) — read it directly rather than
     # str()-ing the whole output model, which would dump every field
     # (confidence, etc.) into the chat bubble. Falls back to str() for a

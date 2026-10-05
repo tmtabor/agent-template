@@ -52,7 +52,7 @@ Figure out which `RUN_MODE` applies before touching the script:
 ## What to build
 
 Copy `assets/scripts/` into the repo root as `scripts/` (alongside
-`scripts/choose_pattern.py` if it's already there):
+`scripts/add_agent.py` if it's already there):
 
 ```
 scripts/

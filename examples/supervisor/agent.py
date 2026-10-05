@@ -73,8 +73,8 @@ worker_agent_a: Agent[SharedDeps, WorkerAOutput] = Agent(
 
 # --- Supervisor agent ---
 class SupervisorOutput(BaseModel):
-    # `result` is the canonical output field shared by all three stubs —
-    # keep it (or rename it consistently) so evals/ stays pattern-agnostic.
+    # `result` is the conventional output field in these examples; the generated
+    # eval starter reads it when present (see evals/helpers.py).
     result: str
     steps_taken: list[str]
 
