@@ -9,7 +9,7 @@ import dataclasses
 import json
 import re
 import subprocess
-from datetime import date
+import sys
 from decimal import Decimal
 from pathlib import Path
 
@@ -403,7 +403,10 @@ def test_the_offline_suite_runs_under_coverage_without_appending():
 def test_the_first_stage_skips_the_transcript_check_and_the_last_runs_it():
     """A new example has no transcript until the gate records it, so checking first would block it."""
     first = release_check.offline_suite_command()
-    assert first[-2:] == ["-k", f"not {release_check.TRANSCRIPT_TEST}"]
+    assert first[-2:] == [
+        "-k",
+        f"not {release_check.TRANSCRIPT_TEST} and not {release_check.BADGE_TEST}",
+    ]
 
     last = release_check.transcript_command([example("router"), example("pipeline")])
     assert last[-2:] == ["-k", f"{release_check.TRANSCRIPT_TEST} and (router or pipeline)"]
@@ -552,16 +555,15 @@ def test_the_coverage_percentage_is_read_from_the_reports_total_line():
     assert release_check.coverage_percent("no total here") is None
 
 
-def test_the_badge_json_is_what_shields_io_reads_and_carries_the_date():
-    badge = release_check.coverage_badge(100.0, date(2026, 10, 6))
-    assert badge == {
+def test_the_badge_json_is_what_shields_io_reads():
+    assert release_check.coverage_badge(100.0) == {
         "schemaVersion": 1,
-        "label": "example coverage",
-        "message": "100% · 2026-10-06",
+        "label": "coverage",
+        "message": "100%",
         "color": "brightgreen",
     }
-    assert release_check.coverage_badge(92.5, date(2026, 1, 2))["color"] == "yellow"
-    assert release_check.coverage_badge(92.5, date(2026, 1, 2))["message"] == "92.5% · 2026-01-02"
+    assert release_check.coverage_badge(92.5)["color"] == "yellow"
+    assert release_check.coverage_badge(92.5)["message"] == "92.5%"
 
 
 def test_a_complete_clean_run_earns_the_badge():
@@ -598,11 +600,11 @@ def test_anything_less_than_a_complete_clean_run_does_not_earn_the_badge(overrid
 def test_writing_the_badge_records_the_percentage_and_creates_the_folder(tmp_path):
     path = tmp_path / "badges" / "coverage.json"
     percent = release_check.write_coverage_badge(
-        release_check.Coverage(True, COVERAGE_REPORT), date(2026, 10, 6), path
+        release_check.Coverage(True, COVERAGE_REPORT), path
     )
     assert percent == 100.0
     written = json.loads(path.read_text())
-    assert written["message"] == "100% · 2026-10-06" and written["schemaVersion"] == 1
+    assert written["message"] == "100%" and written["schemaVersion"] == 1
     assert path.read_text().endswith("\n")
 
 
@@ -610,5 +612,17 @@ def test_the_committed_badge_file_is_valid_if_present():
     path = release_check.BADGE_PATH
     if path.exists():
         badge = json.loads(path.read_text())
-        assert badge["schemaVersion"] == 1 and badge["label"] == "example coverage"
-        assert re.fullmatch(r"\d+(\.\d+)?% · \d{4}-\d{2}-\d{2}", badge["message"])
+        assert badge["schemaVersion"] == 1 and badge["label"] == "coverage"
+        assert re.fullmatch(r"\d+(\.\d+)?%", badge["message"])
+
+
+def test_the_gates_first_stage_leaves_out_the_check_of_the_file_the_gate_writes():
+    """Otherwise an old badge file (say, from before a format change) would stop the gate that fixes it."""
+    command = release_check.offline_suite_command()
+    assert release_check.BADGE_TEST in command[-1]
+    # and the name really selects that test, so the exclusion is not a dead string
+    assert any(
+        release_check.BADGE_TEST in name
+        for name in dir(sys.modules[__name__])
+        if name.startswith("test_")
+    )

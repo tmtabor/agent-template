@@ -40,7 +40,6 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date
 
 from example_manifest import REPO_ROOT, Example, ManifestError, discover
 from record_example import RESULT_PREFIX, Outcome, describe, unverified
@@ -69,6 +68,10 @@ def needs_isolation(example: Example) -> bool:
 
 
 TRANSCRIPT_TEST = "recorded_sample_run"  # tests/test_examples.py: every example has a transcript
+# tests/test_live_tools.py: the committed coverage badge is well formed. Like the transcripts it is a
+# product of this gate, so the gate must not be blocked by an old copy (a format change would otherwise
+# need the file edited by hand before the gate that writes it could run).
+BADGE_TEST = "committed_badge_file"
 
 
 def offline_suite_command() -> list[str]:
@@ -80,7 +83,7 @@ def offline_suite_command() -> list[str]:
     return uv_run(
         None,
         *["coverage", "run", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
-        *["-k", f"not {TRANSCRIPT_TEST}"],
+        *["-k", f"not {TRANSCRIPT_TEST} and not {BADGE_TEST}"],
     )
 
 
@@ -316,13 +319,12 @@ def coverage_percent(report: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def coverage_badge(percent: float, today: date) -> dict:
-    """The JSON that shields.io's endpoint badge reads. It carries the date of the run, so a badge
-    nobody has refreshed says how old it is."""
+def coverage_badge(percent: float) -> dict:
+    """The JSON that shields.io's endpoint badge reads: "coverage: 100%"."""
     return {
         "schemaVersion": 1,
-        "label": "example coverage",
-        "message": f"{percent:g}% · {today.isoformat()}",
+        "label": "coverage",
+        "message": f"{percent:g}%",
         "color": "brightgreen" if percent >= 100 else "yellow",
     }
 
@@ -347,12 +349,12 @@ def badge_is_earned(
     )
 
 
-def write_coverage_badge(coverage: Coverage, today: date, path=BADGE_PATH) -> float:
+def write_coverage_badge(coverage: Coverage, path=BADGE_PATH) -> float:
     """Write the badge file from the coverage report; returns the percentage it records."""
     percent = coverage_percent(coverage.report)
     assert percent is not None  # badge_is_earned checked
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(coverage_badge(percent, today), indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(coverage_badge(percent), indent=2) + "\n", encoding="utf-8")
     return percent
 
 
@@ -419,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
     if summary.ok and badge_is_earned(
         all_examples=not args.examples, measuring=measuring, outcomes=outcomes, coverage=coverage
     ):
-        percent = write_coverage_badge(coverage, date.today())
+        percent = write_coverage_badge(coverage)
         print(
             f"\nWrote {BADGE_PATH.relative_to(REPO_ROOT)} ({percent:g}%): commit it with the release."
         )

@@ -53,6 +53,7 @@ PRUNE_PATHS = [
     # Documents about the template itself, not about the project it became.
     "MAINTAINING.md",
     "CONTRIBUTING.md",
+    "SECURITY.md",  # how to report a problem in the template itself
     "badges",  # the coverage badge's data, written by the release check
 ]
 

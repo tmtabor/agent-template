@@ -32,8 +32,10 @@ have cloned the template: what changed, and whether you need to do anything.
   skill's "Before you start"), instead of the canonical names.
 
 ### Added
+- `SECURITY.md`: how to report a vulnerability (privately, through GitHub's advisory form), what is in scope,
+  and what is not. `--prune` removes it, since it is about the template and not your project.
 - A coverage badge in the README, fed by `badges/coverage.json`, which `scripts/release_check.py` writes after
-  a complete clean run (never after a partial one) with the percentage and the date. `--prune` removes it.
+  a complete clean run (never after a partial one); the badge reads `coverage: 100%`. `--prune` removes it.
 - `CONTRIBUTING.md` and `MAINTAINING.md`: how to contribute, and how to run the release check, cut a
   release and maintain the docs site, moved out of the README. Both are pages on the site.
 - Two guides, the only hand-written pages on the site: "Which pattern should I use?" and an FAQ.

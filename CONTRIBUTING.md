@@ -70,6 +70,10 @@ uv run --group docs mkdocs build --strict  # fails on any broken link
 
 [MAINTAINING.md](MAINTAINING.md#the-documentation-site) has the details, including the README headings the site depends on.
 
+## Security
+
+Do not open a public issue for a security problem: report it privately, as [SECURITY.md](SECURITY.md) describes.
+
 ## License
 
 By contributing you agree that your contribution is licensed under the project's [BSD 3-Clause license](LICENSE).
