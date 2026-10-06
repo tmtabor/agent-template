@@ -4,6 +4,12 @@ version = "0.2.0"
 description = "Opinionated general-purpose AI agent template"
 license = "BSD-3-Clause"
 requires-python = ">=3.13"
+# The versions CI tests and the release check has passed on. requires-python is the floor; this is the claim.
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = [
     "pydantic-ai>=2.54.0",
     "pydantic-settings>=2.15.0",

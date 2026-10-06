@@ -32,6 +32,9 @@ have cloned the template: what changed, and whether you need to do anything.
   skill's "Before you start"), instead of the canonical names.
 
 ### Added
+- Python 3.14 is supported: `pyproject.toml` lists it in the classifiers, CI runs the offline suite on 3.13 and
+  3.14, and the README badge says so. The full release check passed on 3.14.6, and
+  `tests/test_python_versions.py` keeps those claims in agreement. The floor stays 3.13.
 - `SECURITY.md`: how to report a vulnerability (privately, through GitHub's advisory form), what is in scope,
   and what is not. `--prune` removes it, since it is about the template and not your project.
 - A coverage badge in the README, fed by `badges/coverage.json`, which `scripts/release_check.py` writes after
@@ -156,6 +159,11 @@ have cloned the template: what changed, and whether you need to do anything.
 - The unit-test safety net also finds agents held in module-level dicts, lists and tuples.
 - `tests/test_safety_net.py` and the `TestModel` recipe (`examples/single/test_example.py`)
   no longer depend on a chosen agent.
+
+### Fixed
+- The release check ran coverage through the `coverage` console script, whose launcher in a fresh environment cannot
+  see the packages `uv run --with` adds, so on a fresh clone `code_mode`, `rag` and `temporal` skipped their tests
+  and failed the gate. It now runs `python -m coverage`.
 
 ### Removed
 - `scripts/choose_pattern.py`, the canonical re-export in `agent/agents/__init__.py`, and

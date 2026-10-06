@@ -72,6 +72,27 @@ uv run --group docs mkdocs build --strict  # what the workflow runs
 
 One-time setup for a fork or a new copy: in the repository's **Settings → Pages**, set **Source** to **GitHub Actions**. `mkdocs` is pinned `<2`: MkDocs 2.0 will break plugins and themes.
 
+## Python versions
+
+Supported: **3.13 and 3.14**. Three places state it, and `tests/test_python_versions.py` fails if they disagree: the classifiers in `pyproject.toml`, the matrix in `.github/workflows/ci.yml` (which runs lint and the offline suite on each), and the README badge. The floor, `requires-python = ">=3.13"`, is also `.python-version` (develop on the oldest supported version) and ruff's `target-version`.
+
+CI proves the offline suite on each version; only the release check proves the examples. To check a version (a new release, or a release candidate), run it in a scratch copy, so your checkout and its `.venv` are untouched:
+
+```bash
+rsync -a --exclude .venv --exclude .git --exclude site ./ /tmp/py-check/ && cd /tmp/py-check
+echo "3.15" > .python-version                 # or an exact one such as 3.15.0rc3
+uv sync --frozen --group dev                  # --frozen: use the lockfile, do not re-resolve
+uv run python scripts/release_check.py        # the full check, real model calls and Docker
+rm -rf /tmp/py-check                          # the copy holds your .env
+```
+
+- **Add a version to the classifiers, the CI matrix and the README badge only when that full check passes on it.**
+- **A new Python may be missing from your `uv`.** `uv` carries its own list of Python builds, so one installed months ago will not know a recent release candidate (`uv python list` will not show it). Use a current one without upgrading yours: `uvx --from uv==<latest> uv ...`, or put it first on `PATH` for the experiment.
+- **Packages without wheels for the new version are compiled from source**, which needs compilers and, for `pydantic-core`, a Rust toolchain.
+- **Run coverage as `python -m coverage`**, which the release check does. The `coverage` script's launcher decides whether `uv run --with` packages are visible, and a fresh environment's launcher hides them.
+
+**Python 3.15, last tried on 3.15.0rc3 (2026-10-06):** 16 of the 17 examples pass live. `mcp_tools` cannot run: `beartype` 0.22.9, a dependency of the MCP client and the latest release on PyPI, uses `typing.no_type_check_decorator`, which 3.15 removed (its `main` branch no longer does; no release yet). That also stops the offline suite collecting, so the full check cannot run. Retry when a `beartype` release lands.
+
 ## Versions and pins
 
 - **Services are pinned to an exact image version**, never `latest`, so the release check runs against the same server every time. A client library and its server move together: `chromadb-client` 1.5 with `chromadb/chroma:1.5.9`, `temporalio` with `temporalio/temporal:1.8.0`.

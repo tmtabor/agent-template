@@ -48,6 +48,13 @@ from services import ServiceStartError, ServicesUnavailable, run_process, runnin
 Runner = Callable[[Sequence[str], dict[str, str]], "subprocess.CompletedProcess[str]"]
 
 
+# Coverage is always run as `python -m coverage`, never as the `coverage` console script. Under
+# `uv run --with <pkg>`, the script's launcher decides whether the extra packages are visible: the
+# absolute-path launcher an older uv wrote into a long-lived .venv sees them, the relocatable `#!/bin/sh`
+# launcher a fresh environment gets does not, so every example with extra dependencies silently skipped
+# its tests (and the gate rightly failed it) on a fresh clone. `python -m` does not depend on the launcher.
+
+
 def uv_run(example: Example | None, *args: str, tests: bool = False) -> list[str]:
     """`uv run` with the example's declared dependencies layered on, for an isolated run.
 
@@ -82,7 +89,7 @@ def offline_suite_command() -> list[str]:
     """
     return uv_run(
         None,
-        *["coverage", "run", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+        *["python", "-m", "coverage", "run", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
         *["-k", f"not {TRANSCRIPT_TEST} and not {BADGE_TEST}"],
     )
 
@@ -115,7 +122,7 @@ def offline_command(example: Example) -> list[str]:
     """
     return uv_run(
         example,
-        *["coverage", "run", "-a", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+        *["python", "-m", "coverage", "run", "-a", "-m", "pytest", "-q", "-p", "no:cacheprovider"],
         f"examples/{example.name}",
         *GENERIC_TESTS,
         "-k",
@@ -128,7 +135,20 @@ def live_tests_command(example: Example) -> list[str]:
     """One example's real-model tests (`-m eval`), in its isolated environment, with coverage."""
     return uv_run(
         example,
-        *["coverage", "run", "-a", "-m", "pytest", "-m", "eval", "-q", "-p", "no:cacheprovider"],
+        *[
+            "python",
+            "-m",
+            "coverage",
+            "run",
+            "-a",
+            "-m",
+            "pytest",
+            "-m",
+            "eval",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+        ],
         f"examples/{example.name}",
         tests=True,
     )
@@ -143,7 +163,7 @@ def coverage_command(examples: list[Example]) -> list[str]:
             files.append(
                 f"examples/{e.name}/service/server.py"
             )  # a service's code is example code too
-    return uv_run(None, "coverage", "report", f"--include={','.join(files)}")
+    return uv_run(None, "python", "-m", "coverage", "report", f"--include={','.join(files)}")
 
 
 def live_command(example: Example, *, record: bool) -> list[str]:
@@ -398,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     measuring = not args.skip_tests
     if measuring:
         print("→ offline test suite (under coverage)")
-        run_process(uv_run(None, "coverage", "erase"), dict(os.environ))
+        run_process(uv_run(None, "python", "-m", "coverage", "erase"), dict(os.environ))
         tests = run_process(offline_suite_command(), dict(os.environ))
         if tests.returncode != 0:
             print((tests.stdout or tests.stderr).strip()[-2000:])

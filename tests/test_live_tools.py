@@ -388,16 +388,42 @@ def test_failing_live_tests_skip_the_smoke_run_and_the_transcript():
     assert runner.stages == ["live_tests"]  # no smoke run, so nothing was recorded
 
 
+def has_sequence(command: list[str], wanted: list[str]) -> bool:
+    return any(command[i : i + len(wanted)] == wanted for i in range(len(command)))
+
+
+def test_coverage_is_always_run_as_a_module_never_as_the_console_script():
+    """Under `uv run --with`, the script's launcher decides whether the extra packages are visible:
+    a fresh environment's `#!/bin/sh` launcher does not see them, so every example with extra
+    dependencies skipped its tests on a fresh clone. `python -m coverage` does not depend on it."""
+    example = with_deps()
+    commands = [
+        release_check.offline_suite_command(),
+        release_check.offline_command(example),
+        release_check.live_tests_command(example),
+        release_check.coverage_command([example]),
+    ]
+    for command in commands:
+        assert has_sequence(command, ["python", "-m", "coverage"]), command
+        # every other `coverage` is the module's own name, preceded by `-m`
+        for i, word in enumerate(command):
+            if word == "coverage":
+                assert command[i - 1] == "-m", command
+
+
 def test_live_tests_run_in_the_isolated_environment_and_append_to_the_coverage_data():
     command = release_check.live_tests_command(with_deps())
     assert command[:6] == ["uv", "run", "--with", "httpx>=0.28", "--with", "rich"]
-    assert command[6:12] == ["coverage", "run", "-a", "-m", "pytest", "-m"]
+    assert has_sequence(command, ["python", "-m", "coverage", "run", "-a", "-m", "pytest"])
     assert "eval" in command and command[-1] == "examples/router"
 
 
 def test_the_offline_suite_runs_under_coverage_without_appending():
     command = release_check.offline_suite_command()
-    assert command[:5] == ["uv", "run", "coverage", "run", "-m"] and "-a" not in command
+    assert (
+        command[:7] == ["uv", "run", "python", "-m", "coverage", "run", "-m"]
+        and "-a" not in command
+    )
 
 
 def test_the_first_stage_skips_the_transcript_check_and_the_last_runs_it():

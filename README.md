@@ -13,7 +13,7 @@
   <a href="https://github.com/tmtabor/agent-template/actions/workflows/ci.yml"><img src="https://github.com/tmtabor/agent-template/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/tmtabor/agent-template/actions/workflows/docs.yml"><img src="https://github.com/tmtabor/agent-template/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs"></a>
   <a href="MAINTAINING.md#the-release-check"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftmtabor%2Fagent-template%2Fmain%2Fbadges%2Fcoverage.json" alt="Coverage"></a>
-  <img src="https://img.shields.io/badge/python-3.13-blue.svg" alt="Python 3.13">
+  <img src="https://img.shields.io/badge/python-3.13%20%7C%203.14-blue.svg" alt="Python 3.13 and 3.14">
   <img src="https://img.shields.io/badge/Pydantic%20AI-v2-e92063.svg" alt="Pydantic AI v2">
   <a href="https://github.com/tmtabor/agent-template/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tmtabor/agent-template.svg" alt="License"></a>
 </div>
@@ -221,7 +221,7 @@ It is opinionated on purpose. Four opinions are baked in, so you can tell whethe
 
 ## Stack
 
-- Python 3.13, uv
+- Python 3.13 and 3.14, uv
 - Pydantic AI v2 (agents, tools) + pydantic-evals (evals)
 - Logfire (observability)
 - pytest + pytest-asyncio

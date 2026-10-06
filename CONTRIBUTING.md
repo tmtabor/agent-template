@@ -53,7 +53,7 @@ Then `uv run python scripts/release_check.py <example> --record`, and commit the
 
 ## Conventions
 
-- **Python 3.13, ruff** (line length 100). `asyncio_mode = "auto"` is set, so async tests need no decorator.
+- **Python 3.13 and 3.14, ruff** (line length 100). CI runs both; develop on 3.13, the oldest supported. `asyncio_mode = "auto"` is set, so async tests need no decorator.
 - **Tests assert behavior, not wording.** Nothing in the suite may call a real model unless it is marked `eval`.
 - **No secrets, no personal data** in code, fixtures or transcripts.
 - **Commit messages** say what changed and why; the history is the explanation of the design. Small, focused pull requests get reviewed faster.

@@ -14,6 +14,10 @@ No. `uv run pytest` runs the offline tests with a stand-in model: no network, no
 
 By design. `Settings` asks Pydantic AI to build the provider behind `AGENT_MODEL` when it is imported, so a missing or misspelled key fails immediately and clearly, not at the first request. Put the key in `.env` (see `.env.example`) or the environment.
 
+### Which Python versions?
+
+Python 3.13 and 3.14, both tested in CI and by the release check. Develop on 3.13, the oldest supported. Python 3.15 is not supported yet.
+
 ### Which models can I use?
 
 Any model Pydantic AI supports: change `AGENT_MODEL` to a model string such as `openai:gpt-5.2` or `google:gemini-3.1-flash-lite`. The default is `anthropic:claude-sonnet-5-5`. The committed recorded runs were made with `google:gemini-3.1-flash-lite`. See [Configuration](../../README.md#configuration).
