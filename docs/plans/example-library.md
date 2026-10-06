@@ -1,7 +1,24 @@
 # Example agent library — plan
 
-Status: steps 1-7 implemented (7a Monty, 7b Temporal), including the services machinery (step 5
-awaits the one-time Pages setting). Nothing is pending in the example roadmap. Date: 2026-10-05.
+Status: steps 1-7 are implemented and verified (7a Monty, 7b Temporal), including the services
+machinery. **Work still required** is listed under "Still open" below: enabling GitHub Pages, two
+deferred patterns, and one optional improvement. Date: 2026-10-05.
+
+## Still open
+
+These need work; everything else in this plan is done.
+
+1. **Enable GitHub Pages (needs the repo owner).** The docs site and its deploy workflow
+   (`.github/workflows/docs.yml`) are built, but the site is not live until Settings -> Pages ->
+   Source is set to "GitHub Actions". Nothing in the repo can do this.
+2. **Vector-DB-backed retrieval (deferred, not built).** `rag` retrieves from an in-memory store. A
+   version backed by a real vector database would be the next `services` example.
+3. **Router classifier output retries (optional, skipped for now).** The router agent sets no `retries=`
+   (so it uses Pydantic AI's default), where `extraction` and `guardrails` use `retries={"output": 2}`.
+   No failure has been observed; the earlier note that this was "considered during step 6" has no
+   record behind it. Skipped by decision, not forgotten.
+
+Done since step 7: the **planner-executor** example (see its notes below).
 
 ## Goals
 
@@ -185,17 +202,17 @@ Then, in priority order:
 | Human-in-the-loop | Deferred tools requiring approval before risky actions | none |
 | Conversational with memory | Message history across turns, plus streaming | none |
 | Guardrails | Input/output validation, content-filter handling, cost limits | none |
-| MCP tools | Consuming an MCP server's tools | MCP extra |
+| MCP tools | Consuming an MCP server's tools, running as a Docker service (built: `mcp_tools`) | none for the agent; `fastmcp` for the server's tests |
 
 Heavier examples, built in step 7 (they need extra dependencies or services and
 exercise the isolated-environment and `services` machinery):
 
 | Pattern | Shows | Extra dependencies / services |
 |---|---|---|
-| Code execution (Monty) | The model writes Python that runs in a sandboxed interpreter, with only the tools and inputs the example exposes | `pydantic-monty` (confirm the package name and its Pydantic AI integration when building) |
-| Durable workflow (Temporal) | An agent run as a durable, resumable Temporal workflow: retries, crash recovery, long waits | Temporal SDK / Pydantic AI's Temporal integration; a Temporal server (`services = ["temporal"]`, started from the example's `docker-compose.yml`) |
+| Code execution (Monty) | The model writes Python that runs in a sandboxed interpreter, with only the tools and inputs the example exposes (built: `code_mode`) | `pydantic-ai-harness[code-mode]` (which brings `pydantic-monty`) |
+| Durable workflow (Temporal) | An agent run as a durable, resumable Temporal workflow: retries and crash recovery (built: `temporal`) | `temporalio`; a Temporal server (`services = ["temporal"]`, started from the example's `docker-compose.yml`) |
 
-Still deferred beyond step 7: planner-executor and vector-DB-backed retrieval.
+Built after step 7: planner-executor (`planner_executor`). Still deferred and not built: vector-DB-backed retrieval (see "Still open").
 
 ## Trace labels
 
@@ -289,9 +306,9 @@ The unreleased changelog already carries breaking changes, and there are no prod
 of the example library yet, which is why it is done now. Add an Upgrade note.
 
 **Open items, as settled.**
-- `run_*` does **not** take `message_history=` yet. The web-UI skill keeps calling `agent.run()`
-  directly; revisit when the conversational-memory example is built (step 6), where the design
-  of multi-turn flows will say what a history parameter should mean for multi-step runs.
+- Resolved in step 6: `run_chat(..., history=)` takes message history, and `Flow.run` accepts
+  `prompt=None` plus `message_history=` / `deferred_tool_results=` for resumed runs. The web-UI skill
+  still calls `agent.run()` directly.
 - The supervisor's workers stay **inside** the supervisor's single step (usage is total either
   way), which keeps the example teaching the standard `usage=ctx.usage` delegation pattern.
 - Temporal (step 7b) did **not** need a serializable form of the result: a workflow annotated
@@ -352,9 +369,9 @@ of the example library yet, which is why it is done now. Add an Upgrade note.
   to find each example's agent. The offline test resolves the names.
 - `--prune` is destructive; it must show what it will delete and require
   confirmation or `--yes`.
-- Monty and Temporal are the least certain examples: their package names, versions
-  and Pydantic AI integration points must be checked against current docs when step 7
-  starts, and the plan may change then.
+- Monty and Temporal were the least certain examples. Resolved in step 7: their package names, versions
+  and integration points were checked against the installed docs and code, and the plan did change (see
+  the 7a and 7b notes).
 - Each example's live smoke run costs money. Budgets are enforced per example,
   and the release check should report total spend.
 - `sample_run.md` transcripts can go stale between releases; regenerating them
@@ -462,6 +479,47 @@ inherits a tested lifecycle instead of building and debugging one. `mcp_tools` i
 - **For step 7:** Temporal reuses all of this. It needs a `service/docker-compose.yml` that
   publishes 7233 (the image `temporalio/temporal` is already on this machine), a `[service.temporal]`
   table with `env = "TEMPORAL_ADDRESS"`, and a healthcheck.
+
+## Implementation notes (planner-executor, as built)
+
+- **What it is.** Four moving parts: a planner agent whose output type is a `Plan` (steps with `id`,
+  `instruction`, `depends_on`) and which never calls a tool; `check_plan`, plain code that rejects a
+  plan (and, as the planner's output validator, sends it back); a scheduling loop that runs, in
+  parallel, every step whose dependencies are done and gives each executor only its own step and the
+  results it named; and a synthesizer that writes the answer from what completed. It differs from
+  `supervisor` (the model decides each delegation as it goes) and from `pipeline` / `fan_out` (the
+  shape is fixed in code): here the model chooses the shape once and code holds it to the rules.
+- **Domain:** four invented cities (population, area, founded), so a model cannot know them and must
+  use `get_city`; questions chosen so the answers are exact (a density of 1200.0; a 150.0% difference).
+  A deps ledger (`deps.calls`) records every lookup that really ran.
+- **Failure handling, tested:** a failed step is `failed`; every step that needs it, directly or through
+  others, is `skipped` and never reaches an executor; unrelated steps finish; nothing completing raises
+  `AllStepsFailedError`; `UsageLimitExceeded` and cancellation end the run rather than counting as a
+  step failure. A mutation check (steps run one at a time, results leaked to every executor, skip
+  cascade stopped early) was caught by the tests, after one gap was found and closed: a cascade that
+  must finish with no round left to run.
+- **The finding that shaped it.** The real model (Gemini 3.1 Flash-Lite) wrote its "compare them" step
+  with an empty `depends_on` in 9 of 10 sampled plans, even after the rule and an example were put in
+  the prompt. The step then ran in the same round as the lookups, and the answer was still right (the
+  executors could look cities up and the synthesizer did the arithmetic), so a correct answer hid a
+  wrong plan. The fix is in code: a plan must end in **one final step** that everything feeds into
+  (`check_plan`), which turns that mistake into several "loose ends" the check names. Its limit is
+  documented: a calculation step that declares nothing but is used by the final step passes (2 of 10
+  sampled plans), harmlessly here.
+- **The rejection message is part of the prompt.** Saying only what was wrong, the planner repeated the
+  same plan three times and used its whole retry budget (recorded in an early transcript). Saying what to
+  change, computed from the loose ends ("make 's4' the final step by setting its depends_on to include
+  ['s1', 's2', 's3']"), fixed it on the first retry in 11 of 12 sampled plans. The output retry budget
+  is 3 for headroom.
+- **Live:** against Gemini: the densest city and its density (`Quillhaven`, `1200.0`), a calculation over
+  two lookups (`150.0`), and a city that does not exist (the answer says so and no total is invented), plus
+  the plan's shape (all three cities looked up, independent lookups in one round, a step that depends on
+  others, planner first and synthesizer last). Of 21 runs of the live suite with the one-final-step rule in place, 20
+  passed; the one failure could not be reproduced and its cause is unknown, because the gate then
+  reported only log lines.
+- **Generic change:** `release_check.py` now reports a failed stage with pytest's `FAILED` line and
+  assertion detail (`failure_summary`) instead of the last five lines of output, which for a live test
+  are usually captured HTTP logs. This was found because of the unreproducible failure above.
 
 ## Implementation notes (step 7b, Temporal, as built)
 
