@@ -64,6 +64,14 @@ have cloned the template: what changed, and whether you need to do anything.
   `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
   need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
   `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
+- `planner_executor`, an example of plan-then-execute: a planner writes the whole plan as data
+  (steps with `depends_on`), code checks it (`check_plan`: unique ids, real dependencies, no cycles,
+  one final step) and sends a bad plan back with what to change, runs it a round at a time with the
+  independent steps in parallel, gives each executor only the results it depends on, and skips only the
+  steps that needed a failed one. Found with a real model: it rarely declares a step's dependencies, so
+  the one-final-step rule lives in code, and the rejection says what to change, not only what is wrong.
+- `scripts/release_check.py` now reports the pytest failure (the `FAILED` line and the assertion) when
+  a live stage fails, instead of the last log lines.
 - `temporal`, an example of a durable agent: `TemporalDurability` turns the agent's model requests and
   tool calls into Temporal activities and its loop into a workflow, so a failing tool is retried
   without asking the model again, and a worker killed mid-run is replaced by another that finishes it.

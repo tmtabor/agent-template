@@ -1,0 +1,14 @@
+title = "Planner-executor"
+pattern = "planner_executor"
+summary = "A planner writes the whole plan as data, code checks it and runs it (independent steps in parallel, each executor seeing only what it needs), and a last agent writes the answer."
+smoke_input = "Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?"
+# A real model's executors must look the cities up rather than guess (checked by the release check).
+expected_tools = ["get_city"]
+
+# The offline smoke test scripts the planner's plan, so the executors and the synthesizer really run.
+[smoke.planner_agent]
+output = { steps = [{ id = "s1", instruction = "Look up Quillhaven.", depends_on = [] }] }
+
+[entrypoint]
+deps = "PlanDeps"
+run = "run_planner_executor"

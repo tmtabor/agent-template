@@ -158,6 +158,24 @@ def live_env(example: Example, base: dict[str, str]) -> dict[str, str]:
     return env
 
 
+MAX_FAILURE_LINES = 8  # pytest's FAILED lines and assertion details to show; the rest is in the log
+
+
+def failure_summary(output: str) -> str:
+    """What failed, from pytest's output: its `FAILED` summary lines and the assertion details.
+
+    The last lines of a failed pytest run are usually captured log output, which says nothing about
+    what went wrong, so look for the failure itself and fall back to the tail only if there is none.
+    """
+    lines = output.strip().splitlines()
+    found = [
+        line.strip()
+        for line in lines
+        if line.startswith(("FAILED ", "ERROR ")) or line.startswith("E   ")
+    ]
+    return " | ".join((found or lines[-5:])[:MAX_FAILURE_LINES])
+
+
 def parse_outcome(example: Example, completed: subprocess.CompletedProcess[str]) -> Outcome:
     """The Outcome record_example.py printed, or a failure carrying what the process said."""
     for line in reversed(completed.stdout.splitlines()):
@@ -228,8 +246,8 @@ def check_examples(
     outcomes: list[Outcome] = []
 
     def failed(example: Example, what: str, completed) -> Outcome:
-        tail = (completed.stdout or completed.stderr).strip().splitlines()[-5:]
-        return Outcome(example.name, "failed", model=model, error=f"{what}: {' | '.join(tail)}")
+        detail = failure_summary(completed.stdout or completed.stderr)
+        return Outcome(example.name, "failed", model=model, error=f"{what}: {detail}")
 
     def check_one(example: Example, env_for: dict[str, str]) -> Outcome:
         """The three stages for one example, in this environment (which includes any services)."""

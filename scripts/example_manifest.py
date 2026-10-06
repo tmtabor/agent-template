@@ -274,6 +274,7 @@ DISPLAY_ORDER = [
     "human_in_the_loop",
     "guardrails",
     "supervisor",
+    "planner_executor",
     "router",
     "pipeline",
     "fan_out",

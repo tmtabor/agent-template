@@ -21,6 +21,7 @@ uv run python scripts/add_agent.py router --name support
 | [`human_in_the_loop`](human_in_the_loop/) | Pause a risky tool call until a person approves it; reject impossible requests before anyone is asked; resume the same run. | [recorded run](human_in_the_loop/sample_run.md) |
 | [`guardrails`](guardrails/) | Check input in code and with a small guard model, validate output, and turn provider filters and budget limits into safe answers. | [recorded run](guardrails/sample_run.md) |
 | [`supervisor`](supervisor/) | A supervisor decides which specialized workers to call, and in what order, then synthesizes their results. | [recorded run](supervisor/sample_run.md) |
+| [`planner_executor`](planner_executor/) | A planner writes the whole plan as data, code checks it and runs it (independent steps in parallel, each executor seeing only what it needs), and a last agent writes the answer. | [recorded run](planner_executor/sample_run.md) |
 | [`router`](router/) | A classifier picks a category and plain code dispatches to a specialist agent; routing is a lookup, not an LLM loop. | [recorded run](router/sample_run.md) |
 | [`pipeline`](pipeline/) | Fixed sequential steps in code, each agent's typed output feeding the next, with gates between them. | [recorded run](pipeline/sample_run.md) |
 | [`fan_out`](fan_out/) | Run workers in parallel with asyncio.gather, tolerate a failed worker, then aggregate their findings. | [recorded run](fan_out/sample_run.md) |

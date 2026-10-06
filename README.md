@@ -101,6 +101,7 @@ its prompt, a README and an `example.toml`:
 | `blank` | An empty agent: one output type, one prompt, no tools |
 | `single` | One agent handles the whole task |
 | `supervisor` | A supervisor delegates to specialized workers |
+| `planner_executor` | A planner writes the whole plan as data; code checks it and runs it, independent steps in parallel; a last agent answers |
 | `tool_calling` | An agent whose tools call external systems |
 | `extraction` | Free text to a validated schema, with an output validator and retry budget |
 | `rag` | Answer from your own documents with a search tool, and cite only what was really retrieved |

@@ -477,3 +477,40 @@ def test_a_bad_budget_is_rejected(tmp_path: Path, budget: str):
     )
     with pytest.raises(ManifestError, match="cost_budget_usd"):
         load(tmp_path)
+
+
+# --- What a failed stage says ---
+
+PYTEST_FAILURE = """\
+........F.
+=================================== FAILURES ===================================
+_____________ test_the_plan_groups_independent_lookups _____________
+>       assert len(output.waves[0]) >= 2
+E       assert 1 >= 2
+E        +  where 1 = len([['s1']][0])
+------------------------------ Captured log call -------------------------------
+INFO     httpx2:_client.py:1923 HTTP Request: POST https://example.test "HTTP/1.1 200 OK"
+INFO     httpx2:_client.py:1923 HTTP Request: POST https://example.test "HTTP/1.1 200 OK"
+=========================== short test summary info ============================
+FAILED examples/x/test_live.py::test_the_plan_groups_independent_lookups - assert 1 >= 2
+1 failed, 9 passed in 18.7s
+"""
+
+
+def test_a_failed_stage_reports_the_failure_not_the_log_lines_after_it():
+    summary = release_check.failure_summary(PYTEST_FAILURE)
+    assert "FAILED examples/x/test_live.py::test_the_plan_groups_independent_lookups" in summary
+    assert "E       assert 1 >= 2" in summary
+    assert "HTTP Request" not in summary
+
+
+def test_a_failed_stage_with_no_pytest_failure_falls_back_to_the_last_lines():
+    output = "\n".join(f"line {i}" for i in range(20))
+    assert (
+        release_check.failure_summary(output) == "line 15 | line 16 | line 17 | line 18 | line 19"
+    )
+
+
+def test_a_long_failure_is_cut_to_a_readable_length():
+    output = "\n".join(f"FAILED test_{i}" for i in range(50))
+    assert release_check.failure_summary(output).count("FAILED") == release_check.MAX_FAILURE_LINES
