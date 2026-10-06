@@ -2,12 +2,18 @@
 
 Check what goes in and what comes out, and turn failures into safe answers.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+Guardrails are checks around an agent, cheapest first. Plain code can refuse a request before any model is called (here, a card or ID number, so it never leaves your process). A small model can decide whether a request is on topic. A validator on the way out can reject an answer that breaks a rule, whatever the prompt says. And failures that would otherwise crash the caller, such as a provider's content filter or an exhausted budget, become safe answers that say which layer blocked the request.
 
-**Use it when** some requests should never reach the main agent (off-topic, unsafe, containing
-private data), the agent's answer must not contain certain things whatever the model decides, and a
-provider's content filter or an exhausted budget should degrade gracefully instead of crashing the
-caller.
+**Use it when**
+
+- Some requests should never reach the main agent: off-topic, unsafe, or containing private data.
+- The agent's answer must not contain certain things, whatever the model decides.
+- A provider's content filter or an exhausted budget should degrade gracefully and not crash the caller.
+
+**Look elsewhere when**
+
+- You only need the answer to match a schema: an output validator ([`extraction`](../extraction/)) is enough.
+- The risk is an action and not a message: [`human_in_the_loop`](../human_in_the_loop/).
 
 ```
 request → code guard ── card or ID number ──▶ refused (no model called)
@@ -36,6 +42,8 @@ request → code guard ── card or ID number ──▶ refused (no model call
   aren't hidden
 - The result's `steps` show what ran: nothing if the code guard stopped it, only the guard if the
   model guard did, both agents otherwise
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py guardrails --name safe_assistant

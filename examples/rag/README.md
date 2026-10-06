@@ -2,11 +2,19 @@
 
 Answer questions from your own documents, find them by meaning, and let the user see where each answer came from.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+Retrieval-augmented generation (RAG) answers from your documents and not from whatever the model happens to remember. Each passage is turned into an embedding, a vector that captures what it is about, and stored in a vector database. A question gets the same treatment, the database returns the passages nearest in meaning, and the model answers from those and lists their ids as its sources. Because the match is on meaning, a customer's wording doesn't have to match the document's. A check on the way out rejects any source the model did not actually retrieve, so every citation points at something it saw.
 
-**Use it when** answers must come from your documents rather than the model's memory, users ask in
-their own words rather than the documents', users need to see sources, and "I couldn't find that" is
-better than a guess.
+**Use it when**
+
+- Answers must come from your documents and not from the model's memory.
+- Users ask in their own words, not the documents'.
+- Users need to see where an answer came from.
+- "I couldn't find that" is better than a guess.
+
+**Look elsewhere when**
+
+- The documents are small enough to put in the prompt: do that and skip the database.
+- The answer needs a calculation or a query over structured data: use tools ([`tool_calling`](../tool_calling/), [`code_mode`](../code_mode/)).
 
 ```
 documents ─ embed ─▶ Chroma (its own service)
@@ -35,6 +43,8 @@ question ─ embed ─▶ search_docs ─▶ nearest passages ─▶ answer + so
   in a real search result
 - **The address is a dependency.** `RagDeps.chroma_url` (from `CHROMA_URL`) points the agent at the
   local service or a staging database; `ChromaUnavailable` says where it looked
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ## Why vectors and not both
 

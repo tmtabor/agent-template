@@ -2,12 +2,17 @@
 
 Run an agent as a durable Temporal workflow: a failing tool is retried, and a worker that dies mid-run is replaced, without asking the model again for anything it already answered.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
-It is the model's view, in which the carrier never failed: the retry is what the tests and the server's history show.
+Normally an agent run lives in one process: if the process dies, or a tool fails halfway through, the run is lost and you pay for the model calls again. Temporal is a workflow engine that records every step of a run on a server. With one capability on the agent, each model request and each tool call becomes a recorded step. If a tool fails, Temporal retries just that step under a policy you set, and the model never sees the failure. If the worker dies, another picks the run up and replays the record, so steps that already finished are not repeated. The Temporal server runs here as a Docker service.
 
-**Use it when** a run is long enough, or touches enough flaky systems (a carrier's API, a payment
-provider, a slow database), that a crash or an outage partway through would otherwise mean starting
-over and paying for the model calls again; or when you want to start a run, leave, and come back to it.
+**Use it when**
+
+- A run is long enough, or touches enough flaky systems (a carrier's API, a payment provider, a slow database), that a crash or an outage partway through would mean starting over and paying for the model calls again.
+- You want to start a run, leave, and come back to it.
+
+**Look elsewhere when**
+
+- Runs are short and starting again is cheap: a plain agent is enough.
+- You would rather not operate a Temporal server. This example uses a development server in Docker; production needs a real deployment.
 
 ```
 your code ── start workflow ─▶  Temporal server  ◀── polls ──  worker
@@ -38,6 +43,9 @@ your code ── start workflow ─▶  Temporal server  ◀── polls ── 
 - **Tested against the real server.** There is no offline Temporal: its test server downloads a
   binary at run time. So the tests need the Docker service and are skipped without it; the release
   check starts the service, runs them (with the model replaced by `TestModel`) and then the live tests
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+It is the model's view, in which the carrier never failed: the retry is what the tests and the server's history show.
 
 ## Running it
 

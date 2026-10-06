@@ -2,10 +2,18 @@
 
 Run independent workers in parallel, then combine what they found.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+Fan-out sends the same task to several workers at once, each with a different angle (here benefits, drawbacks and risks), and fan-in combines what they return into one answer. The parallelism is `asyncio.gather` in your code, not a model decision. A worker that fails doesn't sink the run: the others' work is kept, the failure is reported, and the answer is built from what succeeded.
 
-**Use it when** subtasks are independent (different perspectives, sources or chunks of a
-document), wall-clock time matters, or one worker failing shouldn't sink the whole answer.
+**Use it when**
+
+- The subtasks are independent: different perspectives, sources or chunks of a document.
+- Wall-clock time matters.
+- One worker failing shouldn't sink the whole answer.
+
+**Look elsewhere when**
+
+- Each step needs the one before it: [`pipeline`](../pipeline/).
+- Which workers run depends on the input: [`router`](../router/) or [`planner_executor`](../planner_executor/).
 
 ```
 topic ─┬→ worker (benefits)  ─┐
@@ -20,6 +28,8 @@ topic ─┬→ worker (benefits)  ─┐
   `AllWorkersFailedError` is raised only if nothing succeeded
 - One `RunUsage` shared across the parallel runs, so `USAGE_LIMITS` bounds all of them
 - Trace labels `<name>.worker` and `<name>.aggregator`
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py fan_out --name analysis

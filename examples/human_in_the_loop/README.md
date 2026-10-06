@@ -1,13 +1,19 @@
 # Human in the loop
 
-Pause a risky action until a person approves it, reject impossible requests before anyone is asked,
-and resume the same run with the decision.
+Pause a risky action until a person approves it, reject impossible requests before anyone is asked, and resume the same run with the decision.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+Some actions an agent can take should not happen on the model's say-so alone: a refund, a deletion, a message sent in your name. Here a tool can pause the run. Instead of acting, it asks for approval and the run stops. A person (or a policy, or a queue you build) decides, and the same run resumes with that decision; if it was denied, the model is told, so it can explain. Requests that can't succeed are rejected first, so nobody is asked about something impossible, and the agent's own claims are checked against a ledger of what really happened.
 
-**Use it when** the agent can take actions with real consequences (money, deletions, messages),
-some should wait for a human while others are fine alone, and a request that can't succeed
-shouldn't cost anyone's attention.
+**Use it when**
+
+- The agent can take actions with real consequences: money, deletions, messages.
+- Some of them should wait for a human and others are fine on their own.
+- A request that can't succeed shouldn't cost anyone's attention.
+
+**Look elsewhere when**
+
+- Every action is safe or reversible: the pause only adds delay.
+- You need to filter what users send in, not approve what the agent does: [`guardrails`](../guardrails/).
 
 ```
 request → tool call → validate
@@ -33,6 +39,8 @@ request → tool call → validate
   rejects a claim that doesn't match it (`refunded=True` with an empty ledger is sent back to the
   model), so the agent can't say it did something it didn't
 - A run that keeps asking for approval is stopped after `MAX_APPROVAL_ROUNDS`
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py human_in_the_loop --name refunds

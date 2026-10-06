@@ -51,7 +51,8 @@ def test_the_pages_the_site_expects_really_exist_in_the_readme():
     for group in gen_pages.README_PAGES:
         for title in group.sections:
             assert title in sections, f"README.md lost its '## {title}' section"
-    assert "Stack" in sections
+    for title in gen_pages.HOME_SECTIONS:
+        assert title in sections, f"README.md lost its '## {title}' section"
 
 
 # --- Lists ---------------------------------------------------------------------------------
@@ -177,12 +178,38 @@ def test_every_internal_link_in_the_site_resolves_to_a_page(site):
                 assert resolved in site, f"{page} links to {target!r}, which is not a page"
 
 
-def test_an_example_page_has_its_readme_recorded_run_and_source(site):
+def test_an_example_page_has_its_readme_source_and_a_collapsed_recorded_run_after_it(site):
     page = site["patterns/router.md"]
     assert page.startswith("# Router\n")
-    assert "## Recorded run" in page and "#### 1. `router.classifier`" in page
     assert '=== "agent.py"' in page and '=== "example.toml"' in page
-    assert "[`sample_run.md`](#recorded-run)" in page  # the README's link now stays on the page
+    assert "[`sample_run.md`](#recorded-run)" in page  # the README's link stays on the page
+    # The recording is a closed block (`???`, not `???+`) below the source, with its own anchor.
+    assert "## Recorded run" not in page and "\n???+ recordedrun" not in page
+    anchor, block = page.index("[](){ #recorded-run }"), page.index("??? recordedrun")
+    assert (
+        page.index("## Source") < page.index('=== "agent.py"') < anchor < block
+    )  # below the source
+    assert block - anchor < 50  # the anchor is right before the block, for extra.js to find it
+    # Its content is still there, its headings are labels (so the table of contents stays short).
+    assert "**1. `router.classifier`**" in page and "\n#### " not in page.split("recordedrun")[1]
+
+
+def test_the_recorded_runs_title_carries_the_models_steps_and_cost():
+    text = (
+        "# Sample run: X\n\n*Recorded 2026-10-06 with `google:gemini-3.1-flash-lite` · 6 steps · "
+        "5,307 tokens · $0.0021 · 4.9 s.*\n\n## Input\n\n> hi\n\n### 1. `x`\n\ntext\n"
+    )
+    block = gen_pages.recorded_run_block(text)
+    assert '??? recordedrun "Recorded run · gemini-3.1-flash-lite · 6 steps · $0.0021"' in block
+    one = gen_pages.recorded_run_block(text.replace("6 steps", "1 steps"))
+    assert "· 1 step ·" in one  # singular
+    assert "\n    **Input**" in block and "\n    **1. `x`**" in block  # headings became labels
+    assert "# Sample run" not in block  # its own title is the block's
+
+
+def test_a_recording_whose_header_is_not_recognised_still_gets_a_plain_title():
+    block = gen_pages.recorded_run_block("# T\n\nno header here\n")
+    assert '??? recordedrun "Recorded run"' in block
 
 
 def test_an_example_that_runs_as_a_service_shows_the_service_files(site):
@@ -210,9 +237,7 @@ def test_an_example_without_a_recording_still_builds_and_drops_the_dead_link(tmp
     )
 
     page = gen_pages.example_page(example, gen_pages.page_map([example]))
-    assert (
-        "## Recorded run" not in page and "See it run" not in page and "#recorded-run" not in page
-    )
+    assert "recordedrun" not in page and "See it run" not in page and "#recorded-run" not in page
     assert page.startswith("# Router\n") and '=== "agent.py"' in page  # everything else is there
 
 
@@ -222,9 +247,13 @@ def test_code_containing_backtick_fences_gets_a_longer_fence():
 
 
 def test_the_home_page_does_not_link_to_itself_as_the_documentation(site):
-    assert gen_pages.DOCS_LINK in (REPO_ROOT / "README.md").read_text()  # so the strip is real
-    assert "Read the documentation" not in site["index.md"]
-    assert "Browse the example patterns" in site["index.md"]
+    readme = (REPO_ROOT / "README.md").read_text()
+    assert f'<a href="{gen_pages.SITE_URL}">Documentation</a>' in readme  # so the strip is real
+    assert ">Documentation</a>" not in site["index.md"]
+    assert f'href="{gen_pages.SITE_URL}"' not in site["index.md"]
+    assert 'href="patterns/"' in site["index.md"]  # the other links in the row stay
+    # The coverage badge's link goes to the page that explains it, as a URL MkDocs serves.
+    assert 'href="reference/maintaining/#the-release-check"' in site["index.md"]
 
 
 def test_the_nav_follows_the_display_order():
@@ -265,3 +294,95 @@ def test_the_real_site_builds_without_warnings(tmp_path: Path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / "site" / "patterns" / "router" / "index.html").exists()
+
+
+# --- The home page: tabs, the header, and links ----------------------------------------------
+
+
+def test_the_use_cases_become_one_tab_each_and_keep_their_code_fences():
+    body = "Intro.\n\n### One\n\ntext\n\n```bash\n# not a heading\nrun\n```\n\n### Two\n\nmore"
+    tabbed = gen_pages.tabs_from_subsections(body)
+    assert tabbed.startswith('Intro.\n\n=== "One"\n\n    text')
+    assert '=== "Two"\n\n    more' in tabbed
+    assert "    ```bash\n    # not a heading\n    run\n    ```" in tabbed  # nested, not split
+
+
+def test_every_use_case_in_the_readme_is_on_the_home_page_in_the_chosen_layout(site):
+    _, sections = gen_pages.split_sections((REPO_ROOT / "README.md").read_text())
+    titles = re.findall(r"^### (.+)$", sections[gen_pages.TABBED_SECTION], re.MULTILINE)
+    assert len(titles) >= 6
+    marker = {"tabs": '=== "{}"', "collapsible": '??? usecase "{}"'}[gen_pages.USE_CASE_LAYOUT]
+    for title in titles:
+        # (the first collapsible block is written `???+`, open)
+        assert marker.format(title) in site["index.md"].replace("???+", "???")
+
+
+def test_the_use_cases_can_be_collapsible_blocks_with_the_first_open_and_fences_intact():
+    body = "Intro.\n\n### One\n\ntext\n\n```bash\n# not a heading\nrun\n```\n\n### Two\n\nmore"
+    out = gen_pages.collapsibles_from_subsections(body)
+    assert out.startswith('Intro.\n\n???+ usecase "One"\n\n    text')
+    assert '\n\n??? usecase "Two"\n\n    more' in out  # closed
+    assert "    ```bash\n    # not a heading\n    run\n    ```" in out
+    assert gen_pages.collapsibles_from_subsections(body, open_first=False).count("???+") == 0
+
+
+def test_the_logo_switches_with_the_sites_colour_scheme_instead_of_the_systems():
+    hero = (
+        '<a href="https://tmtabor.io/agent-template/">\n<picture>\n'
+        '<source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">\n'
+        '<img src="assets/logo-light.svg" alt="x" height="64">\n</picture>\n</a>'
+    )
+    out = gen_pages.hero_for_site(hero)
+    assert "<picture>" not in out and "<a " not in out
+    assert 'src="assets/logo-light.svg#only-light"' in out
+    assert 'src="assets/logo-dark.svg#only-dark"' in out
+
+
+def test_raw_html_links_get_the_directory_urls_mkdocs_serves():
+    text = '<a href="patterns/index.md">a</a> <a href="faq.md">b</a> <a href="guides/x.md#top">c</a> <a href="https://e.com/a.md">d</a>'
+    out = gen_pages.directory_urls_in_html(text)
+    assert 'href="patterns/"' in out and 'href="faq/"' in out and 'href="guides/x/#top"' in out
+    assert 'href="https://e.com/a.md"' in out  # an external link is not ours to change
+
+
+def test_html_attributes_are_rewritten_like_markdown_links():
+    pages = {"examples": "patterns/index.md", "docs/assets/logo-dark.svg": "assets/logo-dark.svg"}
+    text = '<a href="examples/">p</a> <img src="docs/assets/logo-dark.svg"> <a href="https://x.y/">z</a>'
+    out = gen_pages.rewrite_links(text, "README.md", "index.md", pages)
+    assert 'href="patterns/index.md"' in out and 'src="assets/logo-dark.svg"' in out
+    assert 'href="https://x.y/"' in out
+
+
+def test_a_link_to_a_readme_section_lands_on_the_page_that_holds_it():
+    pages = gen_pages.page_map(discover())
+    rewrite = lambda text, page: gen_pages.rewrite_links(text, "docs/pages/faq.md", page, pages)  # noqa: E731
+    assert rewrite("[x](../../README.md#usage-limits)", "faq.md") == "[x](guides/usage-limits.md)"
+    assert rewrite("[x](../../README.md#configuration)", "faq.md") == "[x](configuration.md)"
+    assert rewrite("[x](../../README.md#get-started)", "faq.md") == "[x](index.md#get-started)"
+    # A section that shares a page with another keeps its own anchor.
+    assert rewrite("[x](../../README.md#adding-tools)", "faq.md") == (
+        "[x](guides/tools-and-prompts.md#adding-tools)"
+    )
+
+
+def test_the_guides_the_contributing_and_maintaining_pages_are_in_the_site_and_the_nav(site):
+    for page in (
+        "faq.md",
+        "guides/choosing-a-pattern.md",
+        "contributing.md",
+        "reference/maintaining.md",
+    ):
+        assert page in site and site[page].startswith("# ")
+    flat = str(gen_pages.nav(discover()))
+    for page in (
+        "faq.md",
+        "guides/choosing-a-pattern.md",
+        "contributing.md",
+        "reference/maintaining.md",
+    ):
+        assert page in flat
+
+
+def test_the_site_url_is_the_one_the_site_is_served_at():
+    assert gen_pages.SITE_URL == "https://tmtabor.io/agent-template/"
+    assert examples_index.DOCS_URL.removesuffix("patterns/") == gen_pages.SITE_URL

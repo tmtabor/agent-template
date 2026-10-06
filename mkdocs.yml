@@ -1,25 +1,30 @@
-# The docs site. Its pages are generated from the repo's own files by docs/gen_pages.py (the
-# README, AGENTS.md, CHANGELOG.md and each example), so there is nothing to keep in sync by hand.
+# The docs site. Its pages are generated from the repo's own files by docs/gen_pages.py (the README,
+# AGENTS.md, CHANGELOG.md, CONTRIBUTING.md, MAINTAINING.md, each example, and the two hand-written
+# guides in docs/pages/), so there is nothing to keep in sync by hand.
 #   uv run --group docs mkdocs serve           # preview
 #   uv run --group docs mkdocs build --strict  # what the Pages workflow runs
 site_name: Agent Template
 site_description: >-
   An opinionated template for building production-quality Pydantic AI agents, with a library of
   working example patterns.
-site_url: https://tmtabor.github.io/agent-template/
+site_url: https://tmtabor.io/agent-template/
 repo_url: https://github.com/tmtabor/agent-template
 repo_name: tmtabor/agent-template
 docs_dir: docs
 
-# Not published: the implementation plans, and the generator itself. (The nav is set by the
+# Not published as they are: the implementation plans, the generator itself, and the hand-written
+# guides (which are published at the paths the generator gives them). (The nav is set by the
 # generator too, from the examples that exist.)
 exclude_docs: |
   plans/
+  pages/
   gen_pages.py
   __pycache__/
 
 theme:
   name: material
+  logo: assets/logo-header.svg
+  favicon: assets/favicon.svg
   features:
     - navigation.instant
     - navigation.sections
@@ -42,6 +47,12 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
+extra_css:
+  - assets/extra.css
+
+extra_javascript:
+  - assets/extra.js
+
 plugins:
   - search
   - gen-files:
@@ -60,6 +71,7 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.details
 
 # Anything that doesn't resolve is a warning, and the Pages build runs with --strict.
 validation:

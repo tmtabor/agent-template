@@ -2,11 +2,18 @@
 
 A generator drafts, a critic reviews against criteria, and they loop until the draft passes.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+Two agents work in a loop. A generator writes a draft. A critic reviews it against criteria you wrote and either accepts it or returns specific feedback, and the feedback goes back to the generator for another try. The loop ends when the critic accepts or a round cap is reached; hitting the cap returns the last draft marked as not accepted, so the caller decides what to do. It trades extra model calls for a better answer, and how good the answer gets depends on how well you can state what good looks like.
 
-**Use it when** you can state what "good" looks like as criteria a second model can check, a
-first attempt is usually close but benefits from targeted revision, and a few extra model
-calls are worth a better answer.
+**Use it when**
+
+- You can state what "good" looks like as criteria a second model can check.
+- A first attempt is usually close but benefits from targeted revision.
+- A few extra model calls are worth a better answer.
+
+**Look elsewhere when**
+
+- "Good" can't be written down, or is better checked in code: a validator ([`extraction`](../extraction/)) is cheaper.
+- A first attempt is usually fine: [`single`](../single/).
 
 ```
 generator → draft → critic ─ accepted ─→ done
@@ -21,6 +28,8 @@ generator → draft → critic ─ accepted ─→ done
 - Two prompt files, `evaluator_optimizer_generator.txt` and `evaluator_optimizer_critic.txt`
   (`add_agent.py` renames both to your agent's name)
 - One `RunUsage` shared across rounds; trace labels `<name>.generator` and `<name>.critic`
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py evaluator_optimizer --name descriptions

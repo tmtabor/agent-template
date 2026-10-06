@@ -2,11 +2,18 @@
 
 An agent that remembers what was said, keeps its context bounded, and streams its replies.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+A model has no memory of its own: it sees only what you send with each request. A conversation is the agent sending its earlier messages along with the new one, so it can refer back to them, and taking the new messages from each result to send next time. That history grows with every turn, and so do the context and the bill, so a history processor keeps only the most recent turns, cutting at turn boundaries so a tool call is never separated from its result. Replies can also be streamed, appearing as they are written. This is memory within a conversation, not memory across sessions.
 
-**Use it when** users talk to the agent over several turns and expect it to remember, a long
-conversation shouldn't grow the context (and the bill) without limit, and replies should appear as
-they are written.
+**Use it when**
+
+- Users talk to the agent over several turns and expect it to remember.
+- A long conversation shouldn't grow the context, and the bill, without limit.
+- Replies should appear as they are written.
+
+**Look elsewhere when**
+
+- Each request stands alone: [`single`](../single/).
+- The agent must remember across sessions: store the facts yourself and put them in the instructions.
 
 ```
 turn 1 ─┐
@@ -27,6 +34,8 @@ turn 3 ─┘
 - **What it doesn't do:** once a turn leaves the window the model no longer sees it. That is
   context management, not long-term memory; to remember across sessions, store facts yourself and
   put them in the instructions
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py conversation --name assistant

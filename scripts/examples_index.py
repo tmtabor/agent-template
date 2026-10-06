@@ -16,7 +16,7 @@ import sys
 
 from example_manifest import EXAMPLES_DIR, Example, discover, display_order
 
-DOCS_URL = "https://tmtabor.github.io/agent-template/"
+DOCS_URL = "https://tmtabor.io/agent-template/"
 INDEX_PATH = EXAMPLES_DIR / "README.md"
 
 

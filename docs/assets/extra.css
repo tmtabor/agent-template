@@ -1,0 +1,28 @@
+/* The home page opens with the logo, which is its title. Material adds a "Home" heading above it
+   because the generated page has no H1; hide that heading, only when the centred header follows. */
+.md-content__inner > h1:has(+ div[align="center"]) {
+  display: none;
+}
+
+/* Collapsible blocks without the coloured admonition look: the home page's use cases (see
+   USE_CASE_LAYOUT in docs/gen_pages.py) and each pattern's recorded run. A plain bordered list. */
+.md-typeset details:is(.usecase, .recordedrun) {
+  border-color: var(--md-default-fg-color--lightest);
+  box-shadow: none;
+}
+.md-typeset details:is(.usecase, .recordedrun) > summary {
+  background-color: transparent;
+  font-size: 0.8rem;
+  font-weight: 500;
+  /* Material reserves room on the left for the admonition icon, which this style does not show. */
+  padding-left: 0.8rem;
+}
+.md-typeset details:is(.usecase, .recordedrun) > summary::before {
+  display: none;
+}
+.md-typeset details:is(.usecase, .recordedrun) > summary::after {
+  color: var(--md-primary-fg-color);
+}
+.md-typeset details:is(.usecase, .recordedrun)[open] > summary {
+  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+}

@@ -21,6 +21,8 @@ What it does, in order:
      *after* the live stage (and after --record writes them), not with the offline suite, because
      the transcripts are products of this very gate.
   5. A summary with total tokens and spend. Exits non-zero unless everything passed.
+  6. If the *whole* library passed (every example, tests included, nothing unverified), it writes
+     badges/coverage.json, which the README's coverage badge reads. A subset never writes it.
 
 Makes real model calls: needs the provider key for AGENT_MODEL, and costs money (typically well
 under a dollar for the whole library on the default model). An example that needs `services`
@@ -32,11 +34,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from example_manifest import REPO_ROOT, Example, ManifestError, discover
 from record_example import RESULT_PREFIX, Outcome, describe, unverified
@@ -300,6 +304,58 @@ def coverage_gate(
     return Coverage(report.returncode == 0, (report.stdout or report.stderr))
 
 
+# --- The coverage badge ---------------------------------------------------------------------
+
+BADGE_PATH = REPO_ROOT / "badges" / "coverage.json"
+TOTAL_LINE = re.compile(r"^TOTAL\s+\d+\s+\d+\s+(\d+(?:\.\d+)?)%", re.MULTILINE)
+
+
+def coverage_percent(report: str) -> float | None:
+    """The total from `coverage report`'s output, or None if it has no TOTAL line."""
+    match = TOTAL_LINE.search(report)
+    return float(match.group(1)) if match else None
+
+
+def coverage_badge(percent: float, today: date) -> dict:
+    """The JSON that shields.io's endpoint badge reads. It carries the date of the run, so a badge
+    nobody has refreshed says how old it is."""
+    return {
+        "schemaVersion": 1,
+        "label": "example coverage",
+        "message": f"{percent:g}% · {today.isoformat()}",
+        "color": "brightgreen" if percent >= 100 else "yellow",
+    }
+
+
+def badge_is_earned(
+    *, all_examples: bool, measuring: bool, outcomes: Sequence[Outcome], coverage: Coverage | None
+) -> bool:
+    """Only a complete, clean run may write the badge.
+
+    A subset of the examples, a run without the offline suite, an example that failed or could not
+    be checked (no Docker), or a coverage gate that failed would each make the number mean less
+    than it says, so none of them may overwrite the last good badge.
+    """
+    return bool(
+        all_examples
+        and measuring
+        and outcomes
+        and all(o.status == "passed" for o in outcomes)
+        and coverage is not None
+        and coverage.ok
+        and coverage_percent(coverage.report) is not None
+    )
+
+
+def write_coverage_badge(coverage: Coverage, today: date, path=BADGE_PATH) -> float:
+    """Write the badge file from the coverage report; returns the percentage it records."""
+    percent = coverage_percent(coverage.report)
+    assert percent is not None  # badge_is_earned checked
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(coverage_badge(percent, today), indent=2) + "\n", encoding="utf-8")
+    return percent
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("examples", nargs="*", help="example names (default: all)")
@@ -360,6 +416,13 @@ def main(argv: list[str] | None = None) -> int:
         outcomes, allow_unverified=args.allow_unverified, coverage=coverage, transcripts=transcripts
     )
     print("\n" + summary.text)
+    if summary.ok and badge_is_earned(
+        all_examples=not args.examples, measuring=measuring, outcomes=outcomes, coverage=coverage
+    ):
+        percent = write_coverage_badge(coverage, date.today())
+        print(
+            f"\nWrote {BADGE_PATH.relative_to(REPO_ROOT)} ({percent:g}%): commit it with the release."
+        )
     return 0 if summary.ok else 1
 
 

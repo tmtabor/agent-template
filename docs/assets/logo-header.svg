@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="agent template">
+<title>agent template</title>
+<g transform="translate(0 0)">
+  <rect x="2" y="2" width="44" height="44" rx="11" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M24 15 L14.5 33 M24 15 L33.5 33" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="24" cy="15" r="5.5" fill="#FFFFFF"/>
+  <circle cx="14.5" cy="33" r="4" fill="#FFFFFF"/>
+  <circle cx="33.5" cy="33" r="4" fill="#FFFFFF"/>
+</g>
+</svg>

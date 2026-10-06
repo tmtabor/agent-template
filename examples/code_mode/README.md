@@ -2,11 +2,19 @@
 
 Let the model write Python that calls your tools, in a sandbox.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+In ordinary tool calling the model asks for one tool at a time and reads each result before asking for the next. That gets slow and expensive when a question needs dozens of lookups, and models add numbers badly in their heads. Code mode lets the model write a short program instead. Your tools are hidden behind a single `run_code` tool, the model writes Python that calls them in loops and does the arithmetic, and that code runs in a sandbox that can touch nothing except your tools. One or two model requests can do the work of dozens, and the totals are exact.
 
-**Use it when** a question needs many tool calls (loop over records, join two lookups, aggregate),
-it needs exact arithmetic, which models get wrong when they add numbers in their head, and you'd
-rather have one or two model round trips than dozens.
+**Use it when**
+
+- A question needs many tool calls: looping over records, joining two lookups, aggregating.
+- It needs exact arithmetic, which models get wrong when they add numbers in their head.
+- You would rather have one or two model round trips than dozens.
+
+**Look elsewhere when**
+
+- A question needs only one or two tool calls: [`tool_calling`](../tool_calling/).
+- The model has to judge each result before deciding the next step: the code runs to the end without it.
+- The sandbox runs a subset of Python, with no file or network access, so keep the real logic in your tools.
 
 ```
 plain tool calling   list ids → get_expense × 10 → get_exchange_rate × 3 → add it up by hand
@@ -34,6 +42,8 @@ code mode            run_code( a loop that fetches, converts and sums, exactly )
 - **The payoff, measured:** dozens of host tool calls from a model that needed two or three requests
 - A grounding check: an output validator rejects an answer whose `subject` isn't a real employee or
   expense id
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ```bash
 uv run python scripts/add_agent.py code_mode --name expenses

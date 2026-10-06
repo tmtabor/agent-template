@@ -258,8 +258,17 @@ def test_prune_keeps_blank_and_the_scripts(project: Path):
     (project / "mkdocs.yml").write_text("site_name: x\n")
     (project / "tests" / "test_docs.py").write_text("")
     (project / "scripts" / "release_check.py").write_text("")
+    (project / "CONTRIBUTING.md").write_text("# Contributing\n")
+    (project / "MAINTAINING.md").write_text("# Maintaining\n")
+    (project / "badges").mkdir()
+    (project / "badges" / "coverage.json").write_text("{}")
     add_agent.prune(project)
+    assert not (
+        project / "badges"
+    ).exists()  # the badge data belongs to the template's release check
     assert not (project / "scripts" / "release_check.py").exists()
+    # Documents about the template itself, not about the project it became.
+    assert not (project / "CONTRIBUTING.md").exists() and not (project / "MAINTAINING.md").exists()
     assert (project / "scripts" / "add_agent.py").exists()
     assert sorted(p.name for p in (project / "examples").iterdir() if p.is_dir()) == ["blank"]
     assert not (project / "mkdocs.yml").exists()

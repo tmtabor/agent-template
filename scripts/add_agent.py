@@ -50,6 +50,10 @@ PRUNE_PATHS = [
     "tests/test_add_agent.py",
     "tests/test_live_tools.py",
     "tests/test_trace.py",
+    # Documents about the template itself, not about the project it became.
+    "MAINTAINING.md",
+    "CONTRIBUTING.md",
+    "badges",  # the coverage badge's data, written by the release check
 ]
 
 

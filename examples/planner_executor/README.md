@@ -2,11 +2,19 @@
 
 One agent writes the whole plan; code checks it and carries it out; a last agent writes the answer.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+A planner agent writes the whole plan up front as data: a list of steps, each saying what to do and which earlier steps it needs. It never answers and never calls a tool. Code then checks the plan (no repeated ids, no missing dependencies, no cycles, one final step) and sends a bad plan back to the planner to fix. Once the plan is valid, code runs it a round at a time: every step whose dependencies are done runs now, all of those in parallel, and each executor sees only its own step and the results it depends on. A last agent writes the answer from whatever completed. The model chooses the shape once; code holds it to the rules and does the scheduling.
 
-**Use it when** a question needs several different pieces of work and what they are depends on the
-question; some of them are independent (so they can run at the same time) and some need others'
-results; and you want the plan to exist as data you can check, log, show or approve before anything runs.
+**Use it when**
+
+- A question needs several different pieces of work, and what they are depends on the question.
+- Some of the pieces are independent (so they can run at the same time) and some need others' results.
+- You want the plan to exist as data you can check, log, show or approve before anything runs.
+
+**Look elsewhere when**
+
+- The steps are always the same: [`pipeline`](../pipeline/) is simpler and cheaper.
+- The steps can't be known until you are partway through: [`supervisor`](../supervisor/).
+- The pieces never depend on each other: [`fan_out`](../fan_out/).
 
 ```
 question → planner → Plan(steps) → check in code → executors, a round at a time → synthesizer
@@ -36,6 +44,8 @@ question → planner → Plan(steps) → check in code → executors, a round at
   `AllStepsFailedError`; if the shared budget runs out, `UsageLimitExceeded` ends the run (it is not
   one step's failure)
 - **One budget** for the planner, every executor and the synthesizer (`USAGE_LIMITS` on one `Flow`)
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ## What the real model taught us
 

@@ -2,11 +2,17 @@
 
 Give an agent the tools of a Model Context Protocol (MCP) server that runs as its own service.
 
-**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
+The Model Context Protocol (MCP) is a standard way for a program to offer tools to AI agents. Instead of writing the tools into your agent, you point the agent at an MCP server: it connects, asks what tools the server has, and offers them to the model like any other. When the model calls one, the call goes over the network to the server and the result comes back. The server is its own process, so it can be written in any language, run anywhere, and be shared by this agent, an IDE and any other client. Here it runs as a Docker service.
 
-**Use it when** the tools already exist as an MCP server (yours, or someone else's), one tool
-implementation should serve several clients (this agent, an IDE, another application), or tools
-should be discovered at run time instead of hard-coded into the agent.
+**Use it when**
+
+- The tools already exist as an MCP server, yours or someone else's.
+- One tool implementation should serve several clients: this agent, an IDE, another application.
+- Tools should be discovered at run time and not hard-coded into the agent.
+
+**Look elsewhere when**
+
+- The tools are plain functions that only this agent uses: [`tool_calling`](../tool_calling/) is simpler, with nothing to run beside it.
 
 ```
 agent  ──── HTTP / MCP ────▶  service: days_between · add_days · weekday
@@ -32,6 +38,8 @@ agent  ──── HTTP / MCP ────▶  service: days_between · add_day
 - **Tested for real.** The offline tests run the same server as a local subprocess and talk to it
   over HTTP; the release check builds the Docker image, waits for its healthcheck, finds the port
   Docker chose, and runs the live tests and a recorded run against the container
+
+**See it run:** [`sample_run.md`](sample_run.md) is a recorded run against a real model: what each agent was asked, which tools it called, and what it returned.
 
 ## Running it
 

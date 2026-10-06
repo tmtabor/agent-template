@@ -6,7 +6,10 @@ fake runners. No network, no API key.
 """
 
 import dataclasses
+import json
+import re
 import subprocess
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -514,3 +517,98 @@ def test_a_failed_stage_with_no_pytest_failure_falls_back_to_the_last_lines():
 def test_a_long_failure_is_cut_to_a_readable_length():
     output = "\n".join(f"FAILED test_{i}" for i in range(50))
     assert release_check.failure_summary(output).count("FAILED") == release_check.MAX_FAILURE_LINES
+
+
+# --- The coverage badge ---------------------------------------------------------------------------
+
+COVERAGE_REPORT = """\
+Name                                    Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------
+examples/blank/agent.py                    32      0   100%
+examples/rag/agent.py                     128      0   100%
+---------------------------------------------------------------------
+TOTAL                                     160      0   100%
+"""
+
+
+def passed(name: str = "a") -> Outcome:
+    return Outcome(name, "passed")
+
+
+def earned(**overrides) -> bool:
+    arguments = dict(
+        all_examples=True,
+        measuring=True,
+        outcomes=[passed("a"), passed("b")],
+        coverage=release_check.Coverage(True, COVERAGE_REPORT),
+    )
+    return release_check.badge_is_earned(**{**arguments, **overrides})
+
+
+def test_the_coverage_percentage_is_read_from_the_reports_total_line():
+    assert release_check.coverage_percent(COVERAGE_REPORT) == 100.0
+    assert release_check.coverage_percent("TOTAL      10      1    90%\n") == 90.0
+    assert release_check.coverage_percent("TOTAL      10      1  89.5%\n") == 89.5
+    assert release_check.coverage_percent("no total here") is None
+
+
+def test_the_badge_json_is_what_shields_io_reads_and_carries_the_date():
+    badge = release_check.coverage_badge(100.0, date(2026, 10, 6))
+    assert badge == {
+        "schemaVersion": 1,
+        "label": "example coverage",
+        "message": "100% · 2026-10-06",
+        "color": "brightgreen",
+    }
+    assert release_check.coverage_badge(92.5, date(2026, 1, 2))["color"] == "yellow"
+    assert release_check.coverage_badge(92.5, date(2026, 1, 2))["message"] == "92.5% · 2026-01-02"
+
+
+def test_a_complete_clean_run_earns_the_badge():
+    assert earned()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"all_examples": False},  # only some examples were checked
+        {"measuring": False},  # the offline suite did not run, so there is no coverage to report
+        {"outcomes": [passed("a"), Outcome("b", "failed")]},
+        {"outcomes": [passed("a"), Outcome("b", "unverified")]},  # e.g. Docker was missing
+        {"outcomes": []},
+        {"coverage": None},
+        {"coverage": release_check.Coverage(False, COVERAGE_REPORT)},  # the gate itself failed
+        {"coverage": release_check.Coverage(True, "no total line")},
+    ],
+    ids=[
+        "subset",
+        "no-suite",
+        "failed",
+        "unverified",
+        "nothing-ran",
+        "no-coverage",
+        "gate-failed",
+        "unreadable",
+    ],
+)
+def test_anything_less_than_a_complete_clean_run_does_not_earn_the_badge(overrides):
+    assert not earned(**overrides)
+
+
+def test_writing_the_badge_records_the_percentage_and_creates_the_folder(tmp_path):
+    path = tmp_path / "badges" / "coverage.json"
+    percent = release_check.write_coverage_badge(
+        release_check.Coverage(True, COVERAGE_REPORT), date(2026, 10, 6), path
+    )
+    assert percent == 100.0
+    written = json.loads(path.read_text())
+    assert written["message"] == "100% · 2026-10-06" and written["schemaVersion"] == 1
+    assert path.read_text().endswith("\n")
+
+
+def test_the_committed_badge_file_is_valid_if_present():
+    path = release_check.BADGE_PATH
+    if path.exists():
+        badge = json.loads(path.read_text())
+        assert badge["schemaVersion"] == 1 and badge["label"] == "example coverage"
+        assert re.fullmatch(r"\d+(\.\d+)?% · \d{4}-\d{2}-\d{2}", badge["message"])

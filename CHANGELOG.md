@@ -32,6 +32,12 @@ have cloned the template: what changed, and whether you need to do anything.
   skill's "Before you start"), instead of the canonical names.
 
 ### Added
+- A coverage badge in the README, fed by `badges/coverage.json`, which `scripts/release_check.py` writes after
+  a complete clean run (never after a partial one) with the percentage and the date. `--prune` removes it.
+- `CONTRIBUTING.md` and `MAINTAINING.md`: how to contribute, and how to run the release check, cut a
+  release and maintain the docs site, moved out of the README. Both are pages on the site.
+- Two guides, the only hand-written pages on the site: "Which pattern should I use?" and an FAQ.
+- A logo (light and dark variants), a favicon and a site header mark, in `docs/assets/`.
 - `examples/`: a library of example agents (`blank`, `single`, `supervisor`,
   `tool_calling`), each with source, prompt, README and an `example.toml` manifest.
 - `scripts/add_agent.py` is now the one way to add an agent: an interactive menu of patterns
@@ -130,6 +136,19 @@ have cloned the template: what changed, and whether you need to do anything.
 - `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
 
 ### Changed
+- Each example's README now opens with a fuller explanation of the pattern, a "Use it when" list, and a "Look
+  elsewhere when" list that points to the pattern that fits better. "See it run" moved to after "What it shows".
+- On the docs site, a pattern page now puts the source first and the recorded run last, as a collapsed block whose
+  title gives the model, step count and cost; the "See it run" link opens it.
+- **A new README and docs home page.** Both now open with the logo, the line "Pick a pattern, edit the
+  prompt, ship it.", badges and a pitch, then a three-step "Get started", the use cases under "What are
+  you building?" (tabs on the site), "Why this template" (the opinions baked in), next steps, and the
+  projects built on the template. The reference sections follow, unchanged apart from "Quickstart"
+  becoming "Setup and commands". The README's "Releasing the template" and "Documentation site" sections
+  are gone (see `MAINTAINING.md`). The site is now at https://tmtabor.io/agent-template/
+  (`tmtabor.github.io/agent-template` redirects to it).
+- `add_agent.py --prune` also removes `CONTRIBUTING.md` and `MAINTAINING.md`, which are about the
+  template and not your project.
 - The three pattern stubs moved from `agent/agents/` to `examples/` and are copied into your
   project on demand; the unit-test safety net now also covers `examples/`.
 - The unit-test safety net also finds agents held in module-level dicts, lists and tuples.

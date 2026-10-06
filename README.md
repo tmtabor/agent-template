@@ -1,16 +1,232 @@
-# Agent Template
+<div align="center">
+  <a href="https://tmtabor.io/agent-template/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+      <img src="docs/assets/logo-light.svg" alt="agent template" height="64">
+    </picture>
+  </a>
+</div>
+<div align="center">
+  <h3>Pick a pattern, edit the prompt, ship it.</h3>
+</div>
+<div align="center">
+  <a href="https://github.com/tmtabor/agent-template/actions/workflows/ci.yml"><img src="https://github.com/tmtabor/agent-template/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/tmtabor/agent-template/actions/workflows/docs.yml"><img src="https://github.com/tmtabor/agent-template/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs"></a>
+  <a href="MAINTAINING.md#the-release-check"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftmtabor%2Fagent-template%2Fmain%2Fbadges%2Fcoverage.json" alt="Example coverage"></a>
+  <img src="https://img.shields.io/badge/python-3.13-blue.svg" alt="Python 3.13">
+  <img src="https://img.shields.io/badge/Pydantic%20AI-v2-e92063.svg" alt="Pydantic AI v2">
+  <a href="https://github.com/tmtabor/agent-template/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tmtabor/agent-template.svg" alt="License"></a>
+</div>
+<p align="center">
+  <a href="https://tmtabor.io/agent-template/">Documentation</a> ·
+  <a href="examples/">Examples</a> ·
+  <a href="docs/pages/choosing-a-pattern.md">Which pattern should I use?</a> ·
+  <a href="docs/pages/faq.md">FAQ</a>
+</p>
 
-Opinionated general-purpose AI agent template. Clone and start building.
+---
 
-**[Read the documentation](https://tmtabor.github.io/agent-template/)** · **[Browse the example patterns](examples/)** — each with its source, tests and a recorded run against a real model.
+**Agent Template** is a clean, opinionated starting point for building AI agents using [Pydantic AI](https://pydantic.dev/docs/ai/), with ready-to-go scaffolding for seventeen popular agent patterns: tool calling, retrieval, multi-agent workflows, human approval, durable execution and more. Run one script, pick a pattern, and you get the agent, its prompt, an offline test and an eval starter in your own project, as code you own. There is no framework to depend on.
+
+Every pattern has been run against a real model: each comes with a recorded run you can read, live tests that check what the agent actually did and tests that cover every line of its code. The guardrails are on from the start (limits on requests, tokens and spend) and any model is one setting away.
+
+## Get started
+
+```bash
+# 1. Create your project: click "Use this template" on GitHub, or clone it
+git clone https://github.com/tmtabor/agent-template.git my-agent && cd my-agent
+uv sync --group dev
+cp .env.example .env        # then add the API key for your model provider
+
+# 2. Add an agent: pick a pattern from the menu
+uv run python scripts/add_agent.py
+
+# 3. Edit its prompt (agent/prompts/<name>.txt), then run the tests
+uv run pytest
+```
+
+That gives you `agent/agents/<name>.py`, its prompt, a smoke test and an eval starter. Run `add_agent.py` again for each further agent; each can use a different pattern. The [setup and commands](README.md#setup-and-commands) below cover the rest, and [Which pattern should I use?](docs/pages/choosing-a-pattern.md) helps you choose.
+
+## What are you building?
+
+From a first agent to a long-running multi-agent system, each of these is a pattern you add with one command. Each has working code, tests, and a recorded run against a real model.
+
+### Your first agent
+
+One agent, one prompt, one typed output. Start from `blank` (empty) or `single` (a worked example).
+
+```bash
+uv run python scripts/add_agent.py single --name summarizer
+```
+
+```python
+from agent.agents.summarizer import run_agent
+
+result = await run_agent("Hello, what can you do?")
+result.output  # the validated output
+result.usage  # tokens and requests for the whole run
+```
+
+**Build this →** [single](examples/single/) · [blank](examples/blank/)
+
+### An agent that uses your tools
+
+Give the model tools that call your systems, with errors it can recover from, or use the tools of an existing MCP server.
+
+```bash
+uv run python scripts/add_agent.py tool_calling --name releases
+```
+
+```python
+from agent.agents.releases import run_tool_agent
+
+result = await run_tool_agent("What changed in Python 3.13 compared with 3.12?")
+```
+
+**Build this →** [tool_calling](examples/tool_calling/) · [mcp_tools](examples/mcp_tools/)
+
+### Answers from your own documents
+
+Documents are embedded and stored in a vector database (Chroma, running as a Docker service), so questions are matched by meaning and every cited source is checked against what was really retrieved.
+
+```bash
+uv run python scripts/add_agent.py rag --name support_docs
+docker compose -f services/support_docs/docker-compose.yml up -d --wait   # the database
+```
+
+```python
+from agent.agents.support_docs import run_rag
+
+result = await run_rag("How long can I send my hiking footwear back for my money?")
+result.output.sources  # ['returns-policy']
+```
+
+**Build this →** [rag](examples/rag/)
+
+### Structured data from text
+
+Turn free text into a validated schema, with an output validator that sends a wrong answer back for correction.
+
+```bash
+uv run python scripts/add_agent.py extraction --name contacts
+```
+
+```python
+from agent.agents.contacts import run_extraction
+
+result = await run_extraction(
+    "Hi, it's Ada Lovelace from Analytical Engines Ltd. Reach me at ada@example.com."
+)
+result.output  # a validated Contact
+```
+
+**Build this →** [extraction](examples/extraction/)
+
+### Several agents working together
+
+Six shapes, from the most predictable to the most flexible: a fixed `pipeline`, a `router` that picks a specialist, a parallel `fan_out`, an `evaluator_optimizer` loop, a `planner_executor` whose plan code checks, and a `supervisor` that decides as it goes. [Which one?](docs/pages/choosing-a-pattern.md)
+
+```bash
+uv run python scripts/add_agent.py router --name support
+```
+
+```python
+from agent.agents.support import run_router
+
+result = await run_router("I was charged twice for my subscription this month.")
+result.steps  # each agent run, in order
+```
+
+**Build this →** [pipeline](examples/pipeline/) · [router](examples/router/) · [fan_out](examples/fan_out/) · [evaluator_optimizer](examples/evaluator_optimizer/) · [planner_executor](examples/planner_executor/) · [supervisor](examples/supervisor/)
+
+### Actions a person must approve
+
+Pause a risky tool call until someone approves it, reject impossible requests before anyone is asked, or check input and output with guardrails.
+
+```bash
+uv run python scripts/add_agent.py human_in_the_loop --name refunds
+```
+
+```python
+from agent.agents.refunds import run_refunds
+
+result = await run_refunds("Order A100 arrived with a broken sole. Please refund the full $84.50.")
+```
+
+**Build this →** [human_in_the_loop](examples/human_in_the_loop/) · [guardrails](examples/guardrails/)
+
+### Work that must not be lost
+
+Run the agent as a Temporal workflow: a failing tool is retried, and a crashed worker is replaced, without repeating the model calls that already finished. Temporal runs as a Docker service.
+
+```bash
+uv run python scripts/add_agent.py temporal --name orders
+docker compose -f services/orders/docker-compose.yml up -d --wait   # the Temporal server
+```
+
+```python
+from agent.agents.orders import run_order_desk
+
+result = await run_order_desk(
+    "I'd like to order 3 gizmos for Norway. Are they in stock, and what is the shipping?"
+)
+```
+
+**Build this →** [temporal](examples/temporal/)
+
+### Exact answers over many lookups
+
+Let the model write code that calls your tools in a loop and does the arithmetic, in a sandbox with hard limits, so one or two model requests do the work of dozens.
+
+```bash
+uv run python scripts/add_agent.py code_mode --name expenses
+```
+
+```python
+from agent.agents.expenses import run_expenses
+
+result = await run_expenses("What is the total of Maya's travel expenses, in US dollars?")
+result.output.amount_usd
+```
+
+**Build this →** [code_mode](examples/code_mode/)
+
+### A conversation
+
+Remember earlier turns, keep the context window bounded, and stream replies as they are generated.
+
+```bash
+uv run python scripts/add_agent.py conversation --name chat
+```
+
+```python
+from agent.agents.chat import run_chat
+
+first = await run_chat("Hi! My name is Priya and I'm planning a trip to Lisbon.")
+second = await run_chat("What's my name?", history=first.all_messages())
+```
+
+**Build this →** [conversation](examples/conversation/)
+
+See [all seventeen patterns](examples/README.md), each with its source and a recorded run.
+
+## Why this template
+
+It is opinionated on purpose. Four opinions are baked in, so you can tell whether they are yours:
+
+- **Copy, don't depend.** `add_agent.py` copies a pattern into your project. There is no library to import and nothing to upgrade in place; the code is yours to change.
+- **Guardrails from the start.** Every agent has limits on requests and tokens, an optional spend cap, and a response the provider blocks raises an error instead of coming back half finished. A misconfigured provider fails at import, not at the first request.
+- **Observable by default.** Runs are traced with no per-agent setup: to the console until you give it a Logfire token.
+- **Any model, one config.** `AGENT_MODEL` is the one setting. The patterns' live tests assert behavior that holds for any capable model, not one model's wording.
 
 ## Stack
+
 - Python 3.13, uv
 - Pydantic AI v2 (agents, tools) + pydantic-evals (evals)
 - Logfire (observability)
 - pytest + pytest-asyncio
 
-## Quickstart
+## Setup and commands
 
 ```bash
 # Install dependencies
@@ -211,43 +427,27 @@ The shared evaluators and runner live in `evals/helpers.py`; the judge in `evals
 
 All of these share the same `@pytest.mark.eval` marker — there's no separate marker for the LLM-judge subset. `uv run pytest -m eval` runs all of them and requires a real API key; the LLM-judge evals also cost money (they make an extra model call per test to grade the output).
 
-## Releasing the template (maintainers)
+## Next steps
 
-Before tagging a release, run the release gate yourself, locally. It is manual on purpose — it
-makes real model calls and costs money — so it is not part of CI, which runs only the offline
-tests.
+- **Make it yours.** Edit the prompt, replace the output schema, and add your tools: [Customizing the prompt](README.md#customizing-the-prompt) and [Adding tools](README.md#adding-tools). Each pattern's README ends with how to adapt it.
+- **Test it for real.** Grow the eval fixtures for your task, and run `uv run pytest -m eval` with your key: [Evals](README.md#evals).
+- **Set your limits.** Tune `USAGE_LIMITS` and set `AGENT_COST_LIMIT` before real use: [Usage limits](README.md#usage-limits).
+- **See what it did.** Add a Logfire token and every model call and tool call is traced: [Observability](README.md#observability).
+- **Replace the stand-ins.** The examples use invented data and demo services; swap in your own. The [FAQ](docs/pages/faq.md) says what to check before production.
+- **Join in.** Report a problem or send a fix: [Contributing](CONTRIBUTING.md).
 
-```bash
-# The provider key for AGENT_MODEL must be in .env or the environment
-uv run python scripts/release_check.py            # check every example
-uv run python scripts/release_check.py router     # or just some
-uv run python scripts/release_check.py --record   # also refresh each example's sample_run.md
-```
+## Projects using agent-template
 
-It runs the offline suite, then each example against the real model (its live tests and a smoke
-run, each capped by the example's `cost_budget_usd`), and fails unless every example passes and
-every line of every example's source was exercised. It prints a summary with tokens and spend.
-It checks whichever model `AGENT_MODEL` names, so reconfigure `.env` as you like (the model needs
-to handle tool calls and structured output; a model that can't will fail the gate). It takes a few
-minutes and costs well under a dollar on a small model. See "Releasing" in
-`AGENTS.md` for the details; `add_agent.py --prune` removes this tooling from your own project.
+- **[job-agent](https://github.com/tmtabor/job-agent)**: a daily job-scanning agent. It fetches postings from several sources, filters and scores them against a candidate profile with an LLM, and emails a ranked digest. Runs on GitHub Actions.
+- **[content-agent](https://github.com/tmtabor/content-agent)**: a multi-brand agent that generates social posts, blogs and newsletters, built with Pydantic AI, FastAPI/HTMX and a local Ollama model.
+- **[oss-notifier-agent](https://github.com/tmtabor/oss-notifier-agent)**: an LLM-triaged good-first-issue digest for GitHub repos, delivered by email. Runs on GitHub Actions, no server required.
 
-## Documentation site (maintainers)
+Built something with it? Open a pull request to add it here.
 
-The documentation site is generated from this README, `AGENTS.md`, `CHANGELOG.md` and the
-`examples/` folders by `docs/gen_pages.py`. There are no hand-written pages to keep in sync, so to
-change the docs, change those files; a new example appears in the site, and its navigation,
-automatically.
+## Contributing and maintaining
 
-```bash
-uv run --group docs mkdocs serve           # preview at http://127.0.0.1:8000
-uv run --group docs mkdocs build --strict  # what the workflow runs; fails on any broken link
-uv run python scripts/examples_index.py    # regenerate examples/README.md after editing a manifest
-```
-
-The `Docs` workflow publishes the site to GitHub Pages on every push to `main` that touches the
-docs sources. One-time setup: in the repository's Settings → Pages, set "Source" to "GitHub
-Actions". `add_agent.py --prune` removes all of this from your own project.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to set up, what to run before a pull request, and how to add or change an example.
+- [MAINTAINING.md](MAINTAINING.md): the release check, cutting a release, and the documentation site.
 
 ## License
 
