@@ -11,14 +11,12 @@ These need work; everything else in this plan is done.
 1. **Enable GitHub Pages (needs the repo owner).** The docs site and its deploy workflow
    (`.github/workflows/docs.yml`) are built, but the site is not live until Settings -> Pages ->
    Source is set to "GitHub Actions". Nothing in the repo can do this.
-2. **Vector-DB-backed retrieval (deferred, not built).** `rag` retrieves from an in-memory store. A
-   version backed by a real vector database would be the next `services` example.
-3. **Router classifier output retries (optional, skipped for now).** The router agent sets no `retries=`
+2. **Router classifier output retries (optional, skipped for now).** The router agent sets no `retries=`
    (so it uses Pydantic AI's default), where `extraction` and `guardrails` use `retries={"output": 2}`.
    No failure has been observed; the earlier note that this was "considered during step 6" has no
    record behind it. Skipped by decision, not forgotten.
 
-Done since step 7: the **planner-executor** example (see its notes below).
+Done since step 7: the **planner-executor** example and **vector-backed retrieval** (see their notes below).
 
 ## Goals
 
@@ -198,7 +196,7 @@ Then, in priority order:
 | Prompt chain / pipeline | Fixed sequential steps, each output feeding the next | none |
 | Parallel fan-out | `asyncio.gather` over workers, then an aggregator | none |
 | Evaluator–optimizer | Generator and critic loop with an iteration cap | none |
-| RAG / retrieval | Retrieval tool over local docs, with citations | none (in-memory) at first |
+| RAG / retrieval | Retrieval tool over documents, with citations; by meaning, in Chroma as a service (built: `rag`) | `chromadb-client`; a Chroma server (`services = ["chroma"]`) |
 | Human-in-the-loop | Deferred tools requiring approval before risky actions | none |
 | Conversational with memory | Message history across turns, plus streaming | none |
 | Guardrails | Input/output validation, content-filter handling, cost limits | none |
@@ -212,7 +210,7 @@ exercise the isolated-environment and `services` machinery):
 | Code execution (Monty) | The model writes Python that runs in a sandboxed interpreter, with only the tools and inputs the example exposes (built: `code_mode`) | `pydantic-ai-harness[code-mode]` (which brings `pydantic-monty`) |
 | Durable workflow (Temporal) | An agent run as a durable, resumable Temporal workflow: retries and crash recovery (built: `temporal`) | `temporalio`; a Temporal server (`services = ["temporal"]`, started from the example's `docker-compose.yml`) |
 
-Built after step 7: planner-executor (`planner_executor`). Still deferred and not built: vector-DB-backed retrieval (see "Still open").
+Built after step 7: planner-executor (`planner_executor`) and vector-DB-backed retrieval (`rag` itself, replacing its keyword search). Nothing in the pattern roadmap is deferred any more.
 
 ## Trace labels
 
@@ -479,6 +477,40 @@ inherits a tested lifecycle instead of building and debugging one. `mcp_tools` i
 - **For step 7:** Temporal reuses all of this. It needs a `service/docker-compose.yml` that
   publishes 7233 (the image `temporalio/temporal` is already on this machine), a `[service.temporal]`
   table with `env = "TEMPORAL_ADDRESS"`, and a healthcheck.
+
+## Implementation notes (vector-backed retrieval in `rag`, as built)
+
+- **Decision: replace, not combine.** The request was to replace `rag`'s keyword search or combine the
+  two. Measured on 15 labeled questions with real Gemini embeddings in a real Chroma: keyword first for
+  12 (MRR 0.80), vector first for 15 (MRR 1.00), and reciprocal-rank fusion with the vector side
+  weighted 1x, 2x and 3x first for 14 (MRR 0.97). The hybrid was worse because one spurious keyword hit
+  outranked the right vector answer whatever the weight, so the keyword half was removed. The old
+  keyword search lives on in `test_live.py` as the baseline retrieval is measured against.
+- **What it is.** `RagDeps` carries a Chroma address (`CHROMA_URL`, a Docker service with the image pinned
+  to the client's version, 1.5.9: `latest` was a minor behind), an `Embedder`, and the collection. The
+  embedding model follows the LLM's provider (Google, OpenAI) or `AGENT_EMBEDDING_MODEL`; under the
+  offline test model it is Pydantic AI's `TestEmbeddingModel`; with Anthropic it must be set, and the
+  error says so. `ensure_index` names the collection after the model and a hash of the passages and fills
+  it only if it is not full, so editing a document or changing the model builds a new collection.
+- **Nearest is not relevant.** A vector search always returns the nearest passages, so `MAX_DISTANCE`
+  (0.37, cosine, the middle of the measured gap) drops the clearly unrelated: the right passage was never
+  farther than 0.31 across all 15 test questions, unrelated ones 0.43 or more away (nearest 0.426). A live
+  test checks the cutoff sits 0.03 clear of both, so a change of embedding model says when to re-measure.
+  (The first cutoff, 0.40, was set from about ten questions' distances; measuring all 15 moved it.) For a question that is near the topic but not covered ("Do you sell
+  tents?", 0.35) the cutoff cannot help, and the model correctly said it could not find the answer.
+- **Dependency finding.** `chromadb-client` (the slim HTTP client) and `chromadb` (the full engine) both
+  provide the `chromadb` module and overwrite each other; the full one then runs in "http-only" mode.
+  So the agent depends on the client only and there is no in-process Chroma for tests. The offline tests
+  use the real service with a scripted embedder (each text maps to a vector the test chose, so cosine
+  distances are known exactly), skipped without `CHROMA_URL`.
+- **Tested:** index contents, a full index not rebuilt, a partial one completed, one index per model,
+  ranking and exact distances, the cutoff, the limit, the tool's output and ledger, the citation check, the
+  agent loop; mutation checks (no cutoff, always re-embed, wrong metric, no per-run cache) were all caught.
+  Live: retrieval measured against the baseline, the right passage never lost to the cutoff, unrelated
+  questions return nothing, and the agent end to end (a paraphrase, a two-part question, a code-specific
+  question that must not be answered from the neighbouring notice, and one not covered).
+- **Breaking for `rag`:** `RagDeps` no longer works without the service and `search` / `tokens` are gone.
+  Pre-release, no known users.
 
 ## Implementation notes (planner-executor, as built)
 
