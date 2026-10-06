@@ -104,7 +104,7 @@ its prompt, a README and an `example.toml`:
 | `planner_executor` | A planner writes the whole plan as data; code checks it and runs it, independent steps in parallel; a last agent answers |
 | `tool_calling` | An agent whose tools call external systems |
 | `extraction` | Free text to a validated schema, with an output validator and retry budget |
-| `rag` | Answer from your own documents with a search tool, and cite only what was really retrieved |
+| `rag` | Answer from your own documents by meaning, with embeddings in a Chroma vector database (a Docker service; needs `chromadb-client`), and cite only what was really retrieved |
 | `mcp_tools` | Use the tools of an MCP server that runs as its own Docker service |
 | `code_mode` | The model writes Python that calls your tools in a sandbox (Monty): exact answers from one or two requests (needs `pydantic-ai-harness`) |
 | `temporal` | A durable agent run as a Temporal workflow: failing tools are retried and a crashed worker is replaced, without repeating model calls (Temporal runs as a Docker service; needs `temporalio`) |
@@ -128,7 +128,7 @@ For each agent, `add_agent.py`:
   server, a Dockerfile and a compose file; `temporal` a compose file for the Temporal server) and
   tells you how to start it,
 - runs `uv add` for any extra dependencies the example declares (`code_mode` needs
-  `pydantic-ai-harness[code-mode]`, `temporal` needs `temporalio`), and tells you about any environment variables it needs.
+  `pydantic-ai-harness[code-mode]`, `temporal` needs `temporalio`, `rag` needs `chromadb-client`), and tells you about any environment variables it needs.
 
 There is no shared "primary" agent. Import each agent directly from its own module. Every
 `run_*` helper returns the same thing, a `RunResult` (`agent/runs.py`):

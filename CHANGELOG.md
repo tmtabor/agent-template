@@ -64,6 +64,14 @@ have cloned the template: what changed, and whether you need to do anything.
   `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
   need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
   `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
+- `rag` now retrieves by meaning: passages are embedded (Pydantic AI's `Embedder`) and stored in
+  Chroma, which runs as a Docker service, instead of being matched on keywords in memory. Measured
+  against the keyword baseline with real embeddings, the right passage was first for 15 of 15 questions
+  against 12 of 15, and a keyword/vector hybrid was worse than vectors alone (14 of 15), so the keyword
+  search was removed rather than combined. **Breaking for `rag`:** `RagDeps` has a Chroma address and an
+  embedder instead of being self-contained, `search` and `tokens` are gone, and it needs the Chroma
+  service and `chromadb-client`. An index is named after the embedding model and the documents, so a
+  change of either builds a new one.
 - `planner_executor`, an example of plan-then-execute: a planner writes the whole plan as data
   (steps with `depends_on`), code checks it (`check_plan`: unique ids, real dependencies, no cycles,
   one final step) and sends a bad plan back with what to change, runs it a round at a time with the

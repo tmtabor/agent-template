@@ -13,7 +13,7 @@ uv run python scripts/add_agent.py router --name support
 | [`single`](single/) | One agent handles the whole task, with structured output and a prompt file. | [recorded run](single/sample_run.md) |
 | [`tool_calling`](tool_calling/) | An agent that calls tools against external systems, with the three-outcome error convention. | [recorded run](tool_calling/sample_run.md) |
 | [`extraction`](extraction/) | Turn free text into a validated schema, with an output validator that sends bad answers back for correction. | [recorded run](extraction/sample_run.md) |
-| [`rag`](rag/) | Answer from your own documents with a search tool, and cite only passages the model really retrieved. | [recorded run](rag/sample_run.md) |
+| [`rag`](rag/) | Answer from your own documents by meaning, with embeddings in a Chroma vector database running as a service, and cite only passages the model really retrieved. | [recorded run](rag/sample_run.md) |
 | [`mcp_tools`](mcp_tools/) | Give an agent the tools of a Model Context Protocol server running as its own service: discovered at run time, called over the network, with server errors the model can correct. | [recorded run](mcp_tools/sample_run.md) |
 | [`code_mode`](code_mode/) | Let the model write Python that calls your tools in a sandbox (Monty): many tool calls and exact arithmetic in one or two model requests, with hard limits on what the code can do. | [recorded run](code_mode/sample_run.md) |
 | [`temporal`](temporal/) | Run an agent as a durable Temporal workflow: failing tools are retried and a crashed worker is replaced, without repeating the model calls that already finished. | [recorded run](temporal/sample_run.md) |

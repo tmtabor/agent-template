@@ -1,12 +1,27 @@
 title = "Retrieval (RAG)"
 pattern = "rag"
-summary = "Answer from your own documents with a search tool, and cite only passages the model really retrieved."
-smoke_input = "How long do I have to return a pair of boots?"
-# A real model must search the documents for this (checked by the release check).
+summary = "Answer from your own documents by meaning, with embeddings in a Chroma vector database running as a service, and cite only passages the model really retrieved."
+# Worded to share no key word with the returns policy, so only a search by meaning finds it.
+smoke_input = "How long can I send my hiking footwear back for my money?"
 expected_tools = ["search_docs"]
 
-# TestModel's generated junk cites a source nobody retrieved, which the output validator rejects,
-# so the smoke tests supply an answer it accepts.
+# The agent is only a client of the database: the slim HTTP client, not the whole engine. (The full
+# `chromadb` package cannot be installed beside it: both provide the `chromadb` module.) The tests
+# need the real server too, so they are skipped without CHROMA_URL, like the service below.
+dependencies = ["chromadb-client>=1.5,<1.6"]
+
+# Optional: the embedding model. By default it follows your LLM's provider (Google or OpenAI).
+env = ["AGENT_EMBEDDING_MODEL"]
+
+# The database runs as a docker-compose service (service/). The release check starts it, finds the
+# port Docker chose, and passes the address to the example in CHROMA_URL.
+services = ["chroma"]
+
+[service.chroma]
+port = 8000
+env = "CHROMA_URL"
+url = "http://{address}"
+
 [smoke.rag_agent]
 output = { result = "Returns are accepted within 45 days.", sources = [] }
 

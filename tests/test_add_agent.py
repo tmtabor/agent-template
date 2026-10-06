@@ -281,3 +281,26 @@ def test_removing_a_dependency_group_leaves_the_others_untouched():
     assert "docs = [" not in edited and "mkdocs" not in edited
     assert "dev = [" in edited and "pytest>=" in edited and "[tool.pytest.ini_options]" in edited
     assert add_agent.remove_dependency_group(edited, "docs") == edited  # idempotent
+
+
+# --- What the script tells you to do next ---
+
+
+def test_the_setup_notes_say_which_variables_are_read_and_that_setting_them_is_optional():
+    notes = add_agent.setup_notes(example("rag"), "support_docs", install_needed=False)
+    text = "\n".join(notes)
+    assert (
+        "AGENT_EMBEDDING_MODEL" in text and "if you need to" in text
+    )  # it has a default: not a demand
+    assert "set CHROMA_URL to http://<that host:port>" in text
+    assert "docker compose -f services/support_docs/docker-compose.yml up -d --wait" in text
+    assert "Install its dependencies" not in text  # it was installed already
+
+
+def test_the_setup_notes_give_the_install_command_when_nothing_was_installed():
+    notes = add_agent.setup_notes(example("rag"), "support_docs", install_needed=True)
+    assert notes[0] == "Install its dependencies: uv add chromadb-client>=1.5,<1.6"
+
+
+def test_an_example_that_needs_nothing_has_no_setup_notes():
+    assert add_agent.setup_notes(example("router"), "support", install_needed=False) == []

@@ -348,6 +348,33 @@ def choose_example(examples: list[Example]) -> Example:
         print(f"  '{answer}' isn't on the list.")
 
 
+def setup_notes(example: Example, name: str, *, install_needed: bool) -> list[str]:
+    """What to tell the user to do after the agent is copied, one line each (blank lines included)."""
+    lines: list[str] = []
+    if example.dependencies and install_needed:
+        lines.append(f"Install its dependencies: uv add {' '.join(example.dependencies)}")
+    if example.env:
+        # Some of these are optional (they have a default); the example's README says which.
+        lines.append(
+            f"Environment variables it reads, to set in .env if you need to: {', '.join(example.env)}"
+        )
+    if example.services:
+        compose = f"services/{name}/docker-compose.yml"
+        lines.append(
+            f"Its service ({', '.join(example.services)}) is in services/{name}/. Start it, then tell the agent where it is:"
+        )
+        lines.append(f"    docker compose -f {compose} up -d --wait")
+        for spec in example.service_specs.values():
+            lines.append(
+                f"    docker compose -f {compose} port {spec.name} {spec.port}   # host:port Docker chose"
+            )
+            lines.append(
+                f"    set {spec.env} to {spec.url.replace('{address}', '<that host:port>')}"
+            )
+        lines.append("")
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("example", nargs="?", help="example to copy (omit for a menu)")
@@ -426,22 +453,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nDone — the {name} agent is in agent/agents/{name}.py. Import it directly:")
     print(f"    from agent.agents.{name} import {run}")
     print(f"    result = await {run}(...)   # result.output is the answer\n")
-    if example.dependencies and args.no_install:
-        print(f"Install its dependencies: uv add {' '.join(example.dependencies)}")
-    if example.env:
-        print(f"Set in .env: {', '.join(example.env)}")
-    if example.services:
-        compose = f"services/{name}/docker-compose.yml"
-        print(
-            f"Its service ({', '.join(example.services)}) is in services/{name}/. Start it, then tell the agent where it is:"
-        )
-        print(f"    docker compose -f {compose} up -d --wait")
-        for spec in example.service_specs.values():
-            print(
-                f"    docker compose -f {compose} port {spec.name} {spec.port}   # host:port Docker chose"
-            )
-            print(f"    set {spec.env} to {spec.url.replace('{address}', '<that host:port>')}")
-        print()
+    for line in setup_notes(example, name, install_needed=args.no_install):
+        print(line)
     print(
         "Next steps:\n"
         f"  1. Edit agent/agents/{name}.py and its prompt(s) in agent/prompts/\n"

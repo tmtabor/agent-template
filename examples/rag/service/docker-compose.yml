@@ -1,0 +1,23 @@
+# The Chroma vector database, as a service. Start it by hand with:
+#     docker compose up -d --wait
+# scripts/release_check.py starts and stops it for you when it checks the example. It keeps its data
+# in the container only, so `docker compose down` forgets it and the next run re-indexes.
+services:
+  chroma:
+    # Pinned to the version of the chromadb-client package the agent uses: a client and a server a
+    # minor version apart can disagree about the wire format.
+    image: chromadb/chroma:1.5.9
+    ports:
+      # Publish on 127.0.0.1 only, on a free host port (the first field is left empty so Docker
+      # picks one); `docker compose port chroma 8000` says which.
+      - "127.0.0.1::8000"
+    healthcheck:
+      # Healthy once the heartbeat endpoint answers, so `up --wait` returns when it is ready.
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8000 && printf 'GET /api/v2/heartbeat HTTP/1.0\r\n\r\n' >&3 && grep -q nanosecond <&3
+      interval: 1s
+      timeout: 3s
+      retries: 40
