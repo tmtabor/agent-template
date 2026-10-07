@@ -1,6 +1,6 @@
 # Sample run: MCP tools
 
-*Recorded 2026-10-05 with `google:gemini-3.1-flash-lite` · 1 step · 793 tokens · $0.0003 · 2.0 s.*
+*Recorded 2026-10-07 with `google:gemini-3.1-flash-lite` · 1 step · 793 tokens · $0.0003 · 2.1 s.*
 *Model output varies between runs. Regenerate with `uv run python scripts/record_example.py mcp_tools`.*
 
 ## Input

@@ -7,6 +7,12 @@ have cloned the template: what changed, and whether you need to do anything.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-07
+
+Version 0.3.0 turns the template from "one agent plus three stubs" into a library of seventeen working
+patterns that you add to your own project with one command, each run against a real model, with a
+documentation site.
+
 ### Upgrade notes
 - **The template no longer ships an agent.** `agent/agents/` is empty and there is no
   canonical `run_agent` / `AgentOutput` / `AgentDeps` / `agent` re-export. Run
@@ -30,152 +36,67 @@ have cloned the template: what changed, and whether you need to do anything.
   example's helper; agents you copy with `add_agent.py` get the same shape.
 - **The `agent-web-ui` skill's `chat.py` imports one agent module** you point it at (see the
   skill's "Before you start"), instead of the canonical names.
+- **Python 3.13 is still the minimum**, and 3.14 is now supported. Python 3.15 is not yet.
+- **Some examples read their own environment variables** (an embedding model, the address of a service). They are
+  optional, and only matter if you add that example; see "Configuration" in the README and `.env.example`.
 
 ### Added
-- The environment variables the examples read (`AGENT_EMBEDDING_MODEL`, `CHROMA_URL`, `MCP_SERVER_URL`,
-  `TEMPORAL_ADDRESS`) are documented in `.env.example` and in a new table in the README's Configuration section,
-  and a test fails if an example declares one that is not.
-- Python 3.14 is supported: `pyproject.toml` lists it in the classifiers, CI runs the offline suite on 3.13 and
-  3.14, and the README badge says so. The full release check passed on 3.14.6, and
-  `tests/test_python_versions.py` keeps those claims in agreement. The floor stays 3.13.
-- `SECURITY.md`: how to report a vulnerability (privately, through GitHub's advisory form), what is in scope,
-  and what is not. `--prune` removes it, since it is about the template and not your project.
-- A coverage badge in the README, fed by `badges/coverage.json`, which `scripts/release_check.py` writes after
-  a complete clean run (never after a partial one); the badge reads `coverage: 100%`. `--prune` removes it.
-- `CONTRIBUTING.md` and `MAINTAINING.md`: how to contribute, and how to run the release check, cut a
-  release and maintain the docs site, moved out of the README. Both are pages on the site.
-- Two guides, the only hand-written pages on the site: "Which pattern should I use?" and an FAQ.
-- A logo (light and dark variants), a favicon and a site header mark, in `docs/assets/`.
-- `examples/`: a library of example agents (`blank`, `single`, `supervisor`,
-  `tool_calling`), each with source, prompt, README and an `example.toml` manifest.
-- `scripts/add_agent.py` is now the one way to add an agent: an interactive menu of patterns
-  (or `add_agent.py <example> --name <name>`) that copies the example, its prompt, and
-  scaffolds a smoke test and an eval starter. `--prune` removes the examples you don't need.
-- Tests parametrized over every example (`tests/test_examples.py`, content-filter and
-  cost-limit tests); the smoke test drives each example's whole flow and checks the result, and `tests/test_add_agent.py`, which runs the real script into a scratch
-  copy of the repo and checks that what it generates imports, passes its own smoke test and
-  lint, and has collectable evals.
-- Five more examples: `extraction` (output validator + retry budget), `router` (classifier
-  plus code dispatch), `pipeline` (chained steps with gates), `fan_out` (parallel workers,
-  tolerating a failed one) and `evaluator_optimizer` (generate/critique loop with a round
-  cap). Each has its own `test_example.py` covering its orchestration.
-- `agent_label(__name__)` in `agent/logging.py`: Agent run spans are labeled with the name you
-  gave the agent (`triage`, `triage.worker`), not the example's. The examples use it.
-- Five more examples, each verified against a real model: `rag` (retrieval over documents, with
-  citations an output validator checks were really retrieved), `human_in_the_loop` (a tool that
-  pauses for approval, `args_validator` rejecting impossible requests before anyone is asked, an
-  approver you plug in, and a ledger checked against what the model claims), `conversation`
-  (message history, a turn-based window, streaming), `guardrails` (a PII check in code, an LLM
-  topic guard, an output validator, provider filters and budget limits turned into safe answers)
-  and `mcp_tools` (the tools of an MCP server that runs as its own Docker service, reached over
-  HTTP, with the address in deps and a clear error when the server is down).
-- **Services.** An example can declare a service it needs running: `services = [...]` plus a
-  `[service.<name>]` table in `example.toml` (the container port, the environment variable that
-  receives its address, and a URL template), and `service/docker-compose.yml`. The release check
-  (`scripts/services.py`) builds and starts it with `docker compose up --build --wait`, finds the
-  port Docker chose, passes the address to the example's tests, and always tears it down. If Docker
-  isn't available the example is reported *unverified* with the reason (and fails the check unless
-  `--allow-unverified`), never passed. `test_dependencies` names packages only an example's tests
-  need, which `add_agent.py` does not install into your project. `add_agent.py` copies an example's
-  `service/` to `services/<name>/`, and its generated tests skip unless the service is running.
-- `rag` now retrieves by meaning: passages are embedded (Pydantic AI's `Embedder`) and stored in
-  Chroma, which runs as a Docker service, instead of being matched on keywords in memory. Measured
-  against the keyword baseline with real embeddings, the right passage was first for 15 of 15 questions
-  against 12 of 15, and a keyword/vector hybrid was worse than vectors alone (14 of 15), so the keyword
-  search was removed rather than combined. **Breaking for `rag`:** `RagDeps` has a Chroma address and an
-  embedder instead of being self-contained, `search` and `tokens` are gone, and it needs the Chroma
-  service and `chromadb-client`. An index is named after the embedding model and the documents, so a
-  change of either builds a new one.
-- `planner_executor`, an example of plan-then-execute: a planner writes the whole plan as data
-  (steps with `depends_on`), code checks it (`check_plan`: unique ids, real dependencies, no cycles,
-  one final step) and sends a bad plan back with what to change, runs it a round at a time with the
-  independent steps in parallel, gives each executor only the results it depends on, and skips only the
-  steps that needed a failed one. Found with a real model: it rarely declares a step's dependencies, so
-  the one-final-step rule lives in code, and the rejection says what to change, not only what is wrong.
-- `scripts/release_check.py` now reports the pytest failure (the `FAILED` line and the assertion) when
-  a live stage fails, instead of the last log lines.
-- `temporal`, an example of a durable agent: `TemporalDurability` turns the agent's model requests and
-  tool calls into Temporal activities and its loop into a workflow, so a failing tool is retried
-  without asking the model again, and a worker killed mid-run is replaced by another that finishes it.
-  The Temporal server is a Docker service (`service/`, image pinned). Its tests run against the real
-  server and read its event history: they kill a worker (tidily, and with `SIGKILL` of a separate
-  process), exhaust the retry policy, refuse a non-retryable failure a retry, and check that a run
-  that cannot finish raises `RunTimedOut` instead of hanging.
-- `code_mode`, an example of Pydantic AI's code mode (`pydantic-ai-harness`'s `CodeMode`, running the
-  model's Python in the Monty sandbox): the model writes code that calls the agent's tools in loops,
-  so a question that needs dozens of tool calls and exact arithmetic takes two or three model
-  requests. Its tests run real hostile code (files, environment, clock, network, subprocess,
-  infinite loops, memory, runaway tool loops) in the real sandbox and check that the host is untouched.
-  The first example with a runtime dependency: `add_agent.py` installs
-  `pydantic-ai-harness[code-mode]`. Transcripts now show code the model wrote as code.
-- `run_*` helpers may resume a run with no new prompt: `Flow.run` accepts `prompt=None` with
-  `message_history=` and `deferred_tool_results=`.
-- The release gate runs a dependency-bearing example's generic tests (and its copy-into-a-project
-  test) in its own environment, and checks transcripts after the live stage rather than before it.
-- A documentation site (MkDocs Material, published to GitHub Pages by a `Docs` workflow),
-  generated entirely from the README, `AGENTS.md`, `CHANGELOG.md` and the examples by
-  `docs/gen_pages.py`: nothing is written twice, and every pattern gets a page with its README,
-  recorded run and source. Preview it with `uv run --group docs mkdocs serve`. `examples/README.md`
-  is a generated, browsable index of the examples (`scripts/examples_index.py`). Enable it once in
-  Settings → Pages → Source: "GitHub Actions". A new `docs` dependency group holds the tooling.
-- `scripts/release_check.py`, the live pre-release gate: the offline suite under coverage, then
-  each example in its own `uv run` environment under a spend cap — its real-model live tests
-  (`examples/<name>/test_live.py`, which also require that every agent the example defines ran),
-  and a smoke run — and a gate that every line of every example's source was exercised.
-  `scripts/record_example.py` writes each example's `sample_run.md` transcript from its
-  `RunResult`. The gate is a manual, local step and is not part of CI. `example.toml` gains optional
-  `expected_tools` and `cost_budget_usd`. `evals/trace.py` (`traced_run`) reports every agent and
-  tool call a run made, from its spans. `add_agent.py --prune` removes the release tooling.
-- Two examples now do real work. `tool_calling` looks up Python release notes with a tool that
-  shows all three error outcomes (its old placeholder tool echoed the query, so a real model
-  looped on it), and `supervisor` coordinates a real analyst and writer instead of one
-  placeholder worker. The `evaluator_optimizer` critic's criteria were tightened so the loop
-  converges in two or three rounds.
-- `agent/runs.py`: `RunResult` (output, total usage, per-step results) and `Flow`, which runs
-  agents against one shared budget and records each step. Every example's `run_*` returns a
-  `RunResult`, so tests, evals and callers can see how an answer was produced.
-- Per-agent `[smoke.<agent>]` tables in `example.toml` (`call_tools`, `output`), for agents whose
-  smoke tests need a tool called or whose validators reject `TestModel`'s generated junk.
-- The offline test suite is now hermetic: a root `conftest.py` forces `AGENT_MODEL=test` unless
-  the command line selects the live tests (`-m eval`), so `uv run pytest` passes with no provider
-  key whatever `.env` configures. Previously it crashed on import if `.env` named a provider whose
-  key was missing.
-- `evals/helpers.py`: shared eval evaluators, fixture loader and dataset runner.
-- `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
+- **Seventeen example patterns in `examples/`**, each with its source, prompt, README, offline and live tests, and a
+  recorded run against a real model:
+  - *Basics:* `blank`, `single`, `conversation` (message history, a bounded window, streaming).
+  - *Tools and data:* `tool_calling`, `extraction` (an output validator and a retry budget), `rag` (documents embedded
+    and searched by meaning in Chroma, with citations checked against what was retrieved), `mcp_tools` (the tools of
+    an MCP server running as a Docker service) and `code_mode` (the model writes Python that calls your tools, in a
+    sandbox).
+  - *Several agents:* `supervisor`, `planner_executor` (a plan written as data, checked and run by code), `router`,
+    `pipeline`, `fan_out` and `evaluator_optimizer`.
+  - *Safety and reliability:* `human_in_the_loop` (pause a risky action for approval), `guardrails` (checks on input and
+    output, failures turned into safe answers) and `temporal` (a durable workflow: failing tools are retried, a dead
+    worker is replaced).
+- **`scripts/add_agent.py`**, the one way to add an agent: an interactive menu, or `add_agent.py <example> --name <name>`.
+  It copies the example and its prompt, scaffolds a smoke test and an eval starter, installs the example's extra
+  packages, copies its service (if it has one) to `services/<name>/`, and tells you which environment variables to set.
+  `--prune` removes the examples you did not use, and the docs and release tooling with them.
+- **`RunResult` and `Flow`** (`agent/runs.py`): every `run_*` helper returns the output, the total usage and one step per
+  agent run, whatever the pattern, so a call site does not change when an agent grows from one step to several.
+- **A documentation site** at https://tmtabor.io/agent-template/, generated from the README, the examples and the other
+  documents, so nothing is written twice. Each pattern has a page with an explanation, when to use it and when not to,
+  its source, and its recorded run. Two guides: "Which pattern should I use?" and an FAQ.
+- **`CONTRIBUTING.md`, `MAINTAINING.md` and `SECURITY.md`** (private vulnerability reporting is on), a logo, and a coverage
+  badge in the README. `--prune` removes them, since they are about the template and not your project.
+- **Python 3.14** support: `pyproject.toml` lists it, CI runs lint and the offline suite on 3.13 and 3.14, and
+  `tests/test_python_versions.py` keeps the README badge, the classifiers and the CI matrix in agreement.
+- **A release check** (`scripts/release_check.py`) for maintainers: the offline suite, then each example against a real
+  model in its own environment (its live tests, a smoke run, its Docker service started and stopped for it), a gate that
+  every line of every example's code ran, and the recorded runs. It is manual and local, and is not part of CI.
+- **Examples can need more than the template.** `example.toml` declares extra `dependencies` (installed only when you add
+  that example), `test_dependencies`, `services` (a `docker-compose.yml` the release check starts), smoke-test
+  overrides, `expected_tools` and a `cost_budget_usd`.
+- **Smaller additions:** `agent_label(__name__)` labels each agent's traces with its own name (`triage`, `triage.worker`);
+  `evals/trace.py` reports every agent and tool call a run made, from its spans; `evals/helpers.py` holds the shared
+  evaluators and runner; `Flow.run` can resume a run with no new prompt (`message_history=`, `deferred_tool_results=`);
+  `load_prompt` searches `PROMPTS_DIRS` so examples run in place.
 
 ### Changed
-- The GitHub Actions in `.github/workflows/` are on their current major versions (`checkout` v7, `setup-uv` v10,
-  and v5 or v6 of the Pages actions), which run on Node 24; the old ones printed a Node 20 deprecation warning.
-- Each example's README now opens with a fuller explanation of the pattern, a "Use it when" list, and a "Look
-  elsewhere when" list that points to the pattern that fits better. "See it run" moved to after "What it shows".
-- On the docs site, a pattern page now puts the source first and the recorded run last, as a collapsed block whose
-  title gives the model, step count and cost; the "See it run" link opens it.
-- **A new README and docs home page.** Both now open with the logo, the line "Pick a pattern, edit the
-  prompt, ship it.", badges and a pitch, then a three-step "Get started", the use cases under "What are
-  you building?" (tabs on the site), "Why this template" (the opinions baked in), next steps, and the
-  projects built on the template. The reference sections follow, unchanged apart from "Quickstart"
-  becoming "Setup and commands". The README's "Releasing the template" and "Documentation site" sections
-  are gone (see `MAINTAINING.md`). The site is now at https://tmtabor.io/agent-template/
-  (`tmtabor.github.io/agent-template` redirects to it).
-- `add_agent.py --prune` also removes `CONTRIBUTING.md` and `MAINTAINING.md`, which are about the
-  template and not your project.
-- The three pattern stubs moved from `agent/agents/` to `examples/` and are copied into your
-  project on demand; the unit-test safety net now also covers `examples/`.
-- The unit-test safety net also finds agents held in module-level dicts, lists and tuples.
-- `tests/test_safety_net.py` and the `TestModel` recipe (`examples/single/test_example.py`)
-  no longer depend on a chosen agent.
+- **A new README and documentation home.** They open with a logo, the line "Pick a pattern, edit the prompt, ship it.",
+  badges and a pitch, then a three-step "Get started", the use cases, the four opinions baked in, and next steps. The
+  maintainer sections moved to `MAINTAINING.md`.
+- **`tool_calling` and `supervisor` now do real work.** Their placeholder tool and worker were replaced (a real model
+  looped on the old echoing tool until it hit the request limit): `tool_calling` looks up Python release notes with a
+  tool that shows all three error outcomes, and `supervisor` coordinates a real analyst and writer.
+- **The three pattern stubs moved from `agent/agents/` to `examples/`** and are copied into your project on demand.
+- **The unit-test safety net** also covers `examples/` and agents held in module-level dicts, lists and tuples, and
+  `tests/test_safety_net.py` no longer depends on a chosen agent.
+- The GitHub Actions in `.github/workflows/` are on their current major versions (Node 24).
 
 ### Fixed
-- The template's own tests (`tests/test_add_agent.py`) failed with 33 errors as soon as you had added an agent, which is the
-  first thing "Get started" asks you to do. They now build their scratch projects without your agents, prompts and
-  evals. That the template itself ships no agents is checked in CI, in this repository only.
-- The release check ran coverage through the `coverage` console script, whose launcher in a fresh environment cannot
-  see the packages `uv run --with` adds, so on a fresh clone `code_mode`, `rag` and `temporal` skipped their tests
-  and failed the gate. It now runs `python -m coverage`.
+- **The offline test suite is hermetic.** A root `conftest.py` forces `AGENT_MODEL=test` unless the command line selects the
+  live tests (`-m eval`), so `uv run pytest` passes with no provider key whatever `.env` configures. Before, it crashed on
+  import if `.env` named a provider whose key was missing.
 
 ### Removed
-- `scripts/choose_pattern.py`, the canonical re-export in `agent/agents/__init__.py`, and
-  `tests/test_stubs.py` (replaced by `tests/test_examples.py`).
+- `scripts/choose_pattern.py`, the canonical re-export in `agent/agents/__init__.py`, and `tests/test_stubs.py` (replaced by
+  `tests/test_examples.py`).
 
 ## [0.2.0] - 2026-10-04
 
@@ -256,6 +177,7 @@ Initial release: an opinionated starting point for a production-quality Pydantic
 - Skills for scaffolding a web UI (`agent-web-ui`) and a double-clickable macOS launcher
   (`macos-launcher`), plus CI (ruff and unit tests) and a BSD-3-Clause license.
 
-[Unreleased]: https://github.com/tmtabor/agent-template/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tmtabor/agent-template/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tmtabor/agent-template/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tmtabor/agent-template/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tmtabor/agent-template/releases/tag/v0.1.0

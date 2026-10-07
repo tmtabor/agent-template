@@ -1,6 +1,6 @@
 # Sample run: Evaluator–optimizer
 
-*Recorded 2026-10-05 with `google:gemini-3.1-flash-lite` · 4 steps · 1,086 tokens · $0.0006 · 5.3 s.*
+*Recorded 2026-10-07 with `google:gemini-3.1-flash-lite` · 6 steps · 1,731 tokens · $0.0010 · 6.8 s.*
 *Model output varies between runs. Regenerate with `uv run python scripts/record_example.py evaluator_optimizer`.*
 
 ## Input
@@ -10,7 +10,7 @@
 ## Steps
 
 ### 1. `evaluator_optimizer.generator`
-*162 tokens · $0.0001*
+*185 tokens · $0.0002*
 
 **Prompt**
 > Item: A stainless steel water bottle
@@ -18,60 +18,96 @@
 **Output**
 ```json
 {
-  "result": "Stay hydrated on the go with this sleek, durable stainless steel water bottle. Designed to withstand daily use, it keeps your drinks at the perfect temperature while remaining lightweight and leak-proof, making it the ideal companion for your commute, workout, or outdoor adventures."
+  "result": "Stay hydrated on the go with this durable stainless steel water bottle. Crafted from high-quality, food-grade steel, it features a sleek, leak-proof design that fits perfectly in your cup holder—making it the ideal companion for your daily commute, gym sessions, or outdoor adventures. Keep your drinks at the perfect temperature for hours while reducing single-use plastic waste."
 }
 ```
 
 ### 2. `evaluator_optimizer.critic`
-*353 tokens · $0.0003*
+*326 tokens · $0.0002*
 
 **Prompt**
 > Item: A stainless steel water bottle
 >
 > Description:
-> Stay hydrated on the go with this sleek, durable stainless steel water bottle. Designed to withstand daily use, it keeps your drinks at the perfect temperature while remaining lightweight and leak-proof, making it the ideal companion for your commute, workout, or outdoor adventures.
+> Stay hydrated on the go with this durable stainless steel water bottle. Crafted from high-quality, food-grade steel, it features a sleek, leak-proof design that fits perfectly in your cup holder—making it the ideal companion for your daily commute, gym sessions, or outdoor adventures. Keep your drinks at the perfect temperature for hours while reducing single-use plastic waste.
 
 **Output**
 ```json
 {
   "accepted": false,
-  "feedback": "The description fails on two counts: 1. It is too long (the requirement is two or three sentences, and this is three, but it contains many comma splices and run-on structures that make it effectively four or five sentences). 2. It makes unverified factual claims that the name does not support, specifically 'keeps your drinks at the perfect temperature' (this implies insulation capabilities not mentioned in the name) and 'leak-proof' (a performance claim). Please revise to focus only on the item as described by its name and shorten the structure."
+  "feedback": "The description exceeds the three-sentence limit. Additionally, it makes factual claims (\"high-quality,\" \"food-grade,\" \"leak-proof,\" and \"keep your drinks at the perfect temperature for hours\") that are not supported by the product name. Please remove these claims and condense the text to two or three sentences."
 }
 ```
 
 ### 3. `evaluator_optimizer.generator`
-*321 tokens · $0.0001*
+*309 tokens · $0.0002*
 
 **Prompt**
 > Item: A stainless steel water bottle
 >
 > Previous attempt:
-> Stay hydrated on the go with this sleek, durable stainless steel water bottle. Designed to withstand daily use, it keeps your drinks at the perfect temperature while remaining lightweight and leak-proof, making it the ideal companion for your commute, workout, or outdoor adventures.
+> Stay hydrated on the go with this durable stainless steel water bottle. Crafted from high-quality, food-grade steel, it features a sleek, leak-proof design that fits perfectly in your cup holder—making it the ideal companion for your daily commute, gym sessions, or outdoor adventures. Keep your drinks at the perfect temperature for hours while reducing single-use plastic waste.
 >
 > Feedback to address:
-> The description fails on two counts: 1. It is too long (the requirement is two or three sentences, and this is three, but it contains many …
+> The description exceeds the three-sentenc …
 
 **Output**
 ```json
 {
-  "result": "This durable stainless steel water bottle is a reliable choice for your daily hydration needs. Its sleek design makes it a practical accessory for the gym, office, or travel."
+  "result": "Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your commute, gym sessions, or outdoor adventures. This reusable bottle helps you reduce reliance on single-use plastics."
 }
 ```
 
 ### 4. `evaluator_optimizer.critic`
-*250 tokens · $0.0001*
+*363 tokens · $0.0003*
 
 **Prompt**
 > Item: A stainless steel water bottle
 >
 > Description:
-> This durable stainless steel water bottle is a reliable choice for your daily hydration needs. Its sleek design makes it a practical accessory for the gym, office, or travel.
+> Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your commute, gym sessions, or outdoor adventures. This reusable bottle helps you reduce reliance on single-use plastics.
+
+**Output**
+```json
+{
+  "accepted": false,
+  "feedback": "The description is three sentences long, which is fine, but it fails the length constraint of the instructions. The instructions require the description to be \"two or three sentences long,\" however, the description provided is actually three sentences. Wait—it *is* three sentences. Let me re-read. Ah, it meets the length requirement. However, it fails the \"it says what the item is and gives one concrete benefit\" requirement. You have included three benefits (fits cup holders, convenient for commute/gym/etc., and helps reduce plastic use) rather than \"one concrete benefit.\" Please trim the description to include only one benefit."
+}
+```
+
+### 5. `evaluator_optimizer.generator`
+*327 tokens · $0.0001*
+
+**Prompt**
+> Item: A stainless steel water bottle
+>
+> Previous attempt:
+> Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your commute, gym sessions, or outdoor adventures. This reusable bottle helps you reduce reliance on single-use plastics.
+>
+> Feedback to address:
+> The description is three sentences long, which is fine, but it fails the length constraint of the instructions. The instructions require the descriptio …
+
+**Output**
+```json
+{
+  "result": "Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your daily commute."
+}
+```
+
+### 6. `evaluator_optimizer.critic`
+*221 tokens · $0.0001*
+
+**Prompt**
+> Item: A stainless steel water bottle
+>
+> Description:
+> Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your daily commute.
 
 **Output**
 ```json
 {
   "accepted": true,
-  "feedback": "The description meets all criteria: it is two sentences long, identifies the item, provides a concrete benefit (daily hydration), and makes no unsupported factual claims."
+  "feedback": "The description meets all criteria."
 }
 ```
 
@@ -81,8 +117,8 @@
 
 ```json
 {
-  "result": "This durable stainless steel water bottle is a reliable choice for your daily hydration needs. Its sleek design makes it a practical accessory for the gym, office, or travel.",
+  "result": "Stay hydrated anywhere with this durable stainless steel water bottle. Its versatile design fits most cup holders, making it a convenient choice for your daily commute.",
   "accepted": true,
-  "iterations": 2
+  "iterations": 3
 }
 ```

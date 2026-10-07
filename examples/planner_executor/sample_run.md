@@ -1,6 +1,6 @@
 # Sample run: Planner-executor
 
-*Recorded 2026-10-06 with `google:gemini-3.1-flash-lite` · 6 steps · 5,307 tokens · $0.0021 · 4.9 s.*
+*Recorded 2026-10-07 with `google:gemini-3.1-flash-lite` · 6 steps · 5,278 tokens · $0.0021 · 6.2 s.*
 *Model output varies between runs. Regenerate with `uv run python scripts/record_example.py planner_executor`.*
 
 ## Input
@@ -10,7 +10,7 @@
 ## Steps
 
 ### 1. `planner_executor.planner`
-*1,849 tokens · $0.0008*
+*1,918 tokens · $0.0009*
 
 **Prompt**
 > Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
@@ -24,22 +24,22 @@
   "steps": [
     {
       "id": "s1",
-      "instruction": "Get facts for Brindlemoor.",
+      "instruction": "Look up the population and area of Brindlemoor.",
       "depends_on": []
     },
     {
       "id": "s2",
-      "instruction": "Get facts for Quillhaven.",
+      "instruction": "Look up the population and area of Quillhaven.",
       "depends_on": []
     },
     {
       "id": "s3",
-      "instruction": "Get facts for Tarnby.",
+      "instruction": "Look up the population and area of Tarnby.",
       "depends_on": []
     },
     {
       "id": "s4",
-      "instruction": "Calculate the population density for Brindlemoor, Quillhaven, and Tarnby (population/area), identify the highest value, and state the name of the city with that density.",
+      "instruction": "Calculate the population density (population / area) for each city using the results from s1, s2, and s3. Compare these values to determine which city is the most densely populated and state its name and its density.",
       "depends_on": [
         "s1",
         "s2",
@@ -51,12 +51,12 @@
 ```
 
 ### 2. `planner_executor.executor`
-*727 tokens · $0.0003*
+*735 tokens · $0.0003*
 
 **Prompt**
 > Overall question (for context): Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
 >
-> Your step (s2): Get facts for Quillhaven.
+> Your step (s2): Look up the population and area of Quillhaven.
 >
 > Results of the steps yours depends on:
 > (none)
@@ -73,12 +73,12 @@
 ```
 
 ### 3. `planner_executor.executor`
-*757 tokens · $0.0003*
+*735 tokens · $0.0003*
 
 **Prompt**
 > Overall question (for context): Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
 >
-> Your step (s1): Get facts for Brindlemoor.
+> Your step (s1): Look up the population and area of Brindlemoor.
 >
 > Results of the steps yours depends on:
 > (none)
@@ -90,17 +90,17 @@
 **Output**
 ```json
 {
-  "result": "Brindlemoor has a population of 84,000 and an area of 120 km². Its population density is 700 people per km² (84,000 / 120 = 700)."
+  "result": "Brindlemoor has a population of 84,000 and an area of 120 km²."
 }
 ```
 
 ### 4. `planner_executor.executor`
-*749 tokens · $0.0003*
+*733 tokens · $0.0003*
 
 **Prompt**
 > Overall question (for context): Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
 >
-> Your step (s3): Get facts for Tarnby.
+> Your step (s3): Look up the population and area of Tarnby.
 >
 > Results of the steps yours depends on:
 > (none)
@@ -112,39 +112,42 @@
 **Output**
 ```json
 {
-  "result": "Tarnby has a population of 39,000 and an area of 130 km². Its density is 39,000 / 130 = 300 people/km²."
+  "result": "Tarnby has a population of 39,000 and an area of 130 km²."
 }
 ```
 
 ### 5. `planner_executor.executor`
-*595 tokens · $0.0003*
+*555 tokens · $0.0003*
 
 **Prompt**
 > Overall question (for context): Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
 >
-> Your step (s4): Calculate the population density for Brindlemoor, Quillhaven, and Tarnby (population/area), identify the highest value, and state the name of the city with that density.
+> Your step (s4): Calculate the population density (population / area) for each city using the results from s1, s2, and s3. Compare these values to determine which city is the most densely populated and state its name and its density.
 >
 > Results of the steps yours depends on:
-> - s1: Brindlemoor has a population of 84,000 and an area of 120 km². Its population density is 700 people per km² (84,000 / …
+> - s1: Brindlemoor has a population of 84,000 and an area of 120 km².
+> - s2: Q …
 
 **Output**
 ```json
 {
-  "result": "Based on the calculations:\n- Brindlemoor: 84,000 / 120 = 700 people/km²\n- Quillhaven: 156,000 / 130 = 1,200 people/km²\n- Tarnby: 39,000 / 130 = 300 people/km²\n\nComparing these, Quillhaven has the highest population density at 1,200 people/km²."
+  "result": "- Brindlemoor: 84,000 / 120 km² = 700 people/km²\n- Quillhaven: 156,000 / 130 km² = 1,200 people/km²\n- Tarnby: 39,000 / 130 km² = 300 people/km²\n\nComparing these, Quillhaven is the most densely populated city with a density of 1,200 people/km²."
 }
 ```
 
 ### 6. `planner_executor.synthesizer`
-*630 tokens · $0.0002*
+*602 tokens · $0.0002*
 
 **Prompt**
 > Question: Which of Brindlemoor, Quillhaven and Tarnby is the most densely populated, and what is its density in people per km²?
 >
-> Step s1 (Get facts for Brindlemoor.): Brindlemoor has a population of 84,000 and an area of 120 km². Its population density is 700 people per km² (84,000 / 120 = 700).
+> Step s1 (Look up the population and area of Brindlemoor.): Brindlemoor has a population of 84,000 and an area of 120 km².
 >
-> Step s2 (Get facts for Quillhaven.): Quillhaven has a population of 156,000 and an area of 130 km².
+> Step s2 (Look up the population and area of Quillhaven.): Quillhaven has a population of 156,000 and an area of 130 km².
 >
-> Step s3 (Get facts for Tarnby.): Tarnby has a population of 39,000 and an area of 130 km². Its densit …
+> Step s3 (Look up the population and area of Tarnby.): Tarnby has a population of 39,000 and an area of 130 km².
+>
+> Step s4 (Calc …
 
 **Output**
 ```json
@@ -168,22 +171,22 @@
     "steps": [
       {
         "id": "s1",
-        "instruction": "Get facts for Brindlemoor.",
+        "instruction": "Look up the population and area of Brindlemoor.",
         "depends_on": []
       },
       {
         "id": "s2",
-        "instruction": "Get facts for Quillhaven.",
+        "instruction": "Look up the population and area of Quillhaven.",
         "depends_on": []
       },
       {
         "id": "s3",
-        "instruction": "Get facts for Tarnby.",
+        "instruction": "Look up the population and area of Tarnby.",
         "depends_on": []
       },
       {
         "id": "s4",
-        "instruction": "Calculate the population density for Brindlemoor, Quillhaven, and Tarnby (population/area), identify the highest value, and state the name of the city with that density.",
+        "instruction": "Calculate the population density (population / area) for each city using the results from s1, s2, and s3. Compare these values to determine which city is the most densely populated and state its name and its density.",
         "depends_on": [
           "s1",
           "s2",
@@ -193,10 +196,10 @@
     ]
   },
   "results": {
-    "s1": "Brindlemoor has a population of 84,000 and an area of 120 km². Its population density is 700 people per km² (84,000 / 120 = 700).",
+    "s1": "Brindlemoor has a population of 84,000 and an area of 120 km².",
     "s2": "Quillhaven has a population of 156,000 and an area of 130 km².",
-    "s3": "Tarnby has a population of 39,000 and an area of 130 km². Its density is 39,000 / 130 = 300 people/km².",
-    "s4": "Based on the calculations:\n- Brindlemoor: 84,000 / 120 = 700 people/km²\n- Quillhaven: 156,000 / 130 = 1,200 people/km²\n- Tarnby: 39,000 / 130 = 300 people/km²\n\nComparing these, Quillhaven has the highest population density at 1,200 people/km²."
+    "s3": "Tarnby has a population of 39,000 and an area of 130 km².",
+    "s4": "- Brindlemoor: 84,000 / 120 km² = 700 people/km²\n- Quillhaven: 156,000 / 130 km² = 1,200 people/km²\n- Tarnby: 39,000 / 130 km² = 300 people/km²\n\nComparing these, Quillhaven is the most densely populated city with a density of 1,200 people/km²."
   },
   "waves": [
     [
