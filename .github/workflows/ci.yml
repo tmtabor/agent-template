@@ -29,8 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # An exact version: setup-uv publishes no floating `v8`, `v9` or `v10` tag (only up to `v7`).
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
