@@ -27,10 +27,10 @@ jobs:
       # Makes `uv sync` and every `uv run` below use this interpreter, not the one in .python-version.
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
 

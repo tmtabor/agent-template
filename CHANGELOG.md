@@ -144,6 +144,8 @@ have cloned the template: what changed, and whether you need to do anything.
 - `load_prompt` searches `PROMPTS_DIRS`, so examples can run in place.
 
 ### Changed
+- The GitHub Actions in `.github/workflows/` are on their current major versions (`checkout` v7, `setup-uv` v10,
+  and v5 or v6 of the Pages actions), which run on Node 24; the old ones printed a Node 20 deprecation warning.
 - Each example's README now opens with a fuller explanation of the pattern, a "Use it when" list, and a "Look
   elsewhere when" list that points to the pattern that fits better. "See it run" moved to after "What it shows".
 - On the docs site, a pattern page now puts the source first and the recorded run last, as a collapsed block whose
