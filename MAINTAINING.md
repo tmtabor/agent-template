@@ -25,7 +25,7 @@ It makes real model calls and costs money: a few minutes and about a cent or two
 
 Things to know:
 
-- **It is manual on purpose.** It spends money and needs your key, so it is not in CI. CI (`.github/workflows/ci.yml`) runs only lint, the format check and the offline suite.
+- **It is manual on purpose.** It spends money and needs your key, so it is not in CI. CI (`.github/workflows/ci.yml`) runs only lint, the format check and the offline suite (and, in this repository only, a check that the template ships no agents: a copy of the template has agents of its own).
 - **Services.** An example that declares `services` is started with `docker compose up --build --wait` for the duration of its checks and always torn down, images included. If Docker is not usable it is reported *unverified* with the reason (and fails the check unless `--allow-unverified`), never as passed.
 - **Any capable model.** The check uses whatever `AGENT_MODEL` names, and the live tests assert behavior that holds for any capable model, not one model's wording. A model that cannot call tools and return valid structured output (small local ones often cannot) fails, which is a verdict on the model. A provider outage (a `503`, say) also fails an example; run it again.
 - **The coverage badge.** The badge in the README reads `badges/coverage.json` through shields.io. The release check writes it only after a complete clean run: a subset of the examples, `--skip-tests`, an example that failed or went unverified, or a failed coverage gate each leave the last good badge alone. It records only the percentage (the badge reads `coverage: 100%`), so it is only as fresh as the last release check you committed. Commit it with the release. (The number is the release check's: CI alone exercises less, because it skips the examples that need extra packages or a service.)
@@ -63,7 +63,6 @@ So to change the docs, change those files. Consequences worth knowing:
 - **`examples/README.md` is generated** (`uv run python scripts/examples_index.py`); `tests/test_docs.py` fails if it is stale.
 - **Write for GitHub, expect MkDocs.** The generator adds the blank line MkDocs needs before a list that follows a bold line, but anything else that GitHub forgives and MkDocs does not needs a look at the rendered page; `--strict` only catches broken links.
 - **The preview does not watch the READMEs.** `mkdocs serve` reloads when something under `docs/` or `mkdocs.yml` changes, but the pages are generated from files outside `docs/` (the README, the examples' READMEs, `AGENTS.md`). After editing one, restart `mkdocs serve`, or you will be looking at the old page.
-- **`docs/plans/` is not published.**
 
 ```bash
 uv run --group docs mkdocs serve           # preview at http://127.0.0.1:8000

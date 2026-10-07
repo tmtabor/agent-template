@@ -12,11 +12,10 @@ repo_url: https://github.com/tmtabor/agent-template
 repo_name: tmtabor/agent-template
 docs_dir: docs
 
-# Not published as they are: the implementation plans, the generator itself, and the hand-written
+# Not published as they are: the generator itself, and the hand-written
 # guides (which are published at the paths the generator gives them). (The nav is set by the
 # generator too, from the examples that exist.)
 exclude_docs: |
-  plans/
   pages/
   gen_pages.py
   __pycache__/

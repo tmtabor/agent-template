@@ -22,16 +22,40 @@ from tests.examples_support import example_ids, import_example
 COPIED = ("agent", "examples", "evals", "scripts")
 
 
+BUILD_DEBRIS = shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache")
+
+
+def without_user_agents(directory: str, names: list[str]) -> set[str]:
+    """What not to copy into a scratch project: build debris, and what the repo's owner has added with
+    `add_agent.py` (an agent, its prompt, its eval starter and fixture).
+
+    These tests start from the template as it ships, with no agents. A project built from the template
+    has agents of its own after `add_agent.py` (that is the point), and they must not leak into the
+    scratch copy: they would collide with the agents the tests add, and used to fail the whole file.
+    """
+    skip = BUILD_DEBRIS(directory, names)
+    folder = Path(directory).resolve()
+    if folder == (REPO_ROOT / "agent" / "agents").resolve():
+        skip |= {n for n in names if n.endswith(".py") and n != "__init__.py"}
+    if folder == (REPO_ROOT / "agent" / "prompts").resolve():
+        skip |= {n for n in names if n.endswith(".txt")}
+    if (
+        folder == (REPO_ROOT / "evals").resolve()
+    ):  # the template ships helpers, never a test_<name>.py
+        skip |= {n for n in names if n.startswith("test_") and n.endswith(".py")}
+    if folder == (REPO_ROOT / "evals" / "fixtures").resolve():  # ...and no fixtures
+        skip |= set(names)
+    return skip
+
+
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
-    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache")
     for name in COPIED:
-        shutil.copytree(REPO_ROOT / name, tmp_path / name, ignore=ignore)
+        shutil.copytree(REPO_ROOT / name, tmp_path / name, ignore=without_user_agents)
     (tmp_path / "tests").mkdir()
     for name in ("__init__.py", "conftest.py", "agent_finder.py", "examples_support.py"):
         shutil.copy(REPO_ROOT / "tests" / name, tmp_path / "tests" / name)
     shutil.copy(REPO_ROOT / "pyproject.toml", tmp_path / "pyproject.toml")
-    # A fresh clone has no agents; guard against this repo gaining one by accident.
     assert [p.name for p in (tmp_path / "agent" / "agents").glob("*.py")] == ["__init__.py"]
     return tmp_path
 
@@ -65,9 +89,27 @@ def example(name: str):
     return next(e for e in discover() if e.name == name)
 
 
-def test_the_repo_ships_no_agents():
-    agents = [p.name for p in (REPO_ROOT / "agent" / "agents").glob("*.py")]
-    assert agents == ["__init__.py"]
+def test_a_scratch_project_leaves_out_the_agents_and_prompts_a_user_has_added():
+    """After `add_agent.py` a user's repo has agents; the tests must still start from none.
+
+    (That the *template* ships no agents is checked in CI, only in this repository: see ci.yml.)
+    """
+    agents = str(REPO_ROOT / "agent" / "agents")
+    assert without_user_agents(agents, ["__init__.py", "triage.py", "notes.md"]) >= {"triage.py"}
+    assert "__init__.py" not in without_user_agents(agents, ["__init__.py", "triage.py"])
+    assert "notes.md" not in without_user_agents(
+        agents, ["notes.md"]
+    )  # only agent modules are left out
+    prompts = str(REPO_ROOT / "agent" / "prompts")
+    assert without_user_agents(prompts, ["templates.py", "triage.txt"]) >= {"triage.txt"}
+    assert "templates.py" not in without_user_agents(prompts, ["templates.py", "triage.txt"])
+    evals = str(REPO_ROOT / "evals")
+    assert without_user_agents(evals, ["helpers.py", "test_support.py"]) >= {"test_support.py"}
+    assert "helpers.py" not in without_user_agents(evals, ["helpers.py", "test_support.py"])
+    fixtures = str(REPO_ROOT / "evals" / "fixtures")
+    assert without_user_agents(fixtures, ["support.json"]) >= {"support.json"}
+    elsewhere = str(REPO_ROOT / "scripts")
+    assert "triage.txt" not in without_user_agents(elsewhere, ["triage.txt"])  # untouched
 
 
 @pytest.mark.parametrize("ex", example_ids())

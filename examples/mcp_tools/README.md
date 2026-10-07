@@ -27,7 +27,7 @@ agent  ──── HTTP / MCP ────▶  service: days_between · add_day
   `Dockerfile` and `docker-compose.yml`. The agent reaches it over the network, so the tools are
   discovered across a wire, and the server can be written in anything, run anywhere, and shared
 - **The address is a dependency.** `McpDeps.server_url` (read from `MCP_SERVER_URL`, defaulting to
-  the local service) feeds a toolset the agent builds per run (`@agent.toolset`), so the same agent
+  port 8000 on this machine, which the Docker service does not use: it publishes on a random free port) feeds a toolset the agent builds per run (`@agent.toolset`), so the same agent
   can use a staging server or a test double. Pointing it at a different MCP server changes nothing
   else: the tools are discovered, not coded
 - **Server errors the model can fix:** a malformed date raises in the tool, and the model sees

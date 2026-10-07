@@ -32,6 +32,9 @@ have cloned the template: what changed, and whether you need to do anything.
   skill's "Before you start"), instead of the canonical names.
 
 ### Added
+- The environment variables the examples read (`AGENT_EMBEDDING_MODEL`, `CHROMA_URL`, `MCP_SERVER_URL`,
+  `TEMPORAL_ADDRESS`) are documented in `.env.example` and in a new table in the README's Configuration section,
+  and a test fails if an example declares one that is not.
 - Python 3.14 is supported: `pyproject.toml` lists it in the classifiers, CI runs the offline suite on 3.13 and
   3.14, and the README badge says so. The full release check passed on 3.14.6, and
   `tests/test_python_versions.py` keeps those claims in agreement. The floor stays 3.13.
@@ -161,6 +164,9 @@ have cloned the template: what changed, and whether you need to do anything.
   no longer depend on a chosen agent.
 
 ### Fixed
+- The template's own tests (`tests/test_add_agent.py`) failed with 33 errors as soon as you had added an agent, which is the
+  first thing "Get started" asks you to do. They now build their scratch projects without your agents, prompts and
+  evals. That the template itself ships no agents is checked in CI, in this repository only.
 - The release check ran coverage through the `coverage` console script, whose launcher in a fresh environment cannot
   see the packages `uv run --with` adds, so on a fresh clone `code_mode`, `rag` and `temporal` skipped their tests
   and failed the gate. It now runs `python -m coverage`.

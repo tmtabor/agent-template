@@ -40,7 +40,8 @@ USAGE_LIMITS = UsageLimits(
     request_limit=12, total_tokens_limit=100_000, cost_limit=settings.cost_limit
 )
 
-# Where the service listens when you start it with `docker compose up` (see service/).
+# The server's own port, for a server you start yourself on it. The Docker service publishes on a random
+# free host port instead, so set MCP_SERVER_URL to the address `docker compose port` shows (see service/).
 DEFAULT_SERVER_URL = "http://127.0.0.1:8000/mcp"
 
 

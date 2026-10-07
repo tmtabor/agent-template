@@ -66,9 +66,9 @@ USAGE_LIMITS = UsageLimits(
 )
 
 # --- Temporal settings ---
-DEFAULT_ADDRESS = (
-    "127.0.0.1:7233"  # where the service listens when started with `docker compose up`
-)
+# Temporal's own port, for a server you start yourself on it. The Docker service publishes on a random
+# free host port instead, so set TEMPORAL_ADDRESS to the address `docker compose port` shows (see service/).
+DEFAULT_ADDRESS = "127.0.0.1:7233"
 TASK_QUEUE = "order-desk"  # the queue the worker polls and the workflow is started on
 RUN_TIMEOUT = timedelta(
     minutes=2

@@ -67,7 +67,9 @@ MAX_RESULTS = 3  # passages returned per search; keep context small and relevant
 # Distances are not comparable between embedding models, so re-measure when you change yours.
 MAX_DISTANCE = 0.37
 
-DEFAULT_CHROMA_URL = "http://127.0.0.1:8000"  # where the service listens when started with compose
+# Chroma's own port, for a server you start yourself on it. The Docker service publishes on a random free
+# host port instead, so set CHROMA_URL to the address `docker compose port` shows (see service/).
+DEFAULT_CHROMA_URL = "http://127.0.0.1:8000"
 # The embedding model to use with each LLM provider's key, when AGENT_EMBEDDING_MODEL is not set.
 # (Anthropic has no embedding model, so with an Anthropic LLM you must choose one yourself.)
 DEFAULT_EMBEDDING_MODELS = {

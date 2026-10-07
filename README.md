@@ -297,6 +297,17 @@ standard names because the provider SDKs read those exact variables directly.
 | `AGENT_LOG_CONTENT` | `true` | Whether traces include prompts, model outputs and tool arguments. Set `false` in production if they may be sensitive. Evals force it on, since `ArgumentCorrectness` reads tool arguments from spans. |
 | `AGENT_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 
+### Variables only some examples read
+
+An example reads these only if you add it; `add_agent.py` names the ones to set, and the release check sets the service addresses itself.
+
+| Variable | Example | Default | Notes |
+|---|---|---|---|
+| `AGENT_EMBEDDING_MODEL` | `rag` | follows the provider of `AGENT_MODEL` (Google or OpenAI) | The embedding model for retrieval. Anthropic has no embedding model, so with an Anthropic `AGENT_MODEL` set this, for example to `google:gemini-embedding-001`; the key for that provider must be set too. |
+| `CHROMA_URL` | `rag` | `http://127.0.0.1:8000` | Where the Chroma server is. The Docker service publishes on a random free port, so set this to the address `add_agent.py` shows how to find. |
+| `MCP_SERVER_URL` | `mcp_tools` | `http://127.0.0.1:8000/mcp` | The MCP server's URL. Set it to the published port, as for `CHROMA_URL`. |
+| `TEMPORAL_ADDRESS` | `temporal` | `127.0.0.1:7233` | The `host:port` of the Temporal server. Set it to the published port, as for `CHROMA_URL`. |
+
 ## Agents
 
 The template starts with **no agents**. When you want one, run `add_agent.py`

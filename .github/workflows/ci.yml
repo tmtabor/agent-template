@@ -34,6 +34,14 @@ jobs:
         with:
           enable-cache: true
 
+      # The template ships no agents: add_agent.py creates them. A project built from the template
+      # has agents of its own, so this check only runs in the template's own repository.
+      - name: The template ships no agents
+        if: github.repository == 'tmtabor/agent-template'
+        run: |
+          extra=$(ls agent/agents/*.py | grep -v '/__init__.py$' || true)
+          test -z "$extra" || { echo "the template must ship no agents, found: $extra"; exit 1; }
+
       - name: Install dependencies
         run: uv sync --group dev
 
