@@ -386,3 +386,37 @@ def test_the_guides_the_contributing_and_maintaining_pages_are_in_the_site_and_t
 def test_the_site_url_is_the_one_the_site_is_served_at():
     assert gen_pages.SITE_URL == "https://tmtabor.io/agent-template/"
     assert examples_index.DOCS_URL.removesuffix("patterns/") == gen_pages.SITE_URL
+
+
+# --- The docs workflow rebuilds the site when (and only when) a page's source changes ----------------
+
+
+def test_the_docs_workflow_runs_when_any_file_the_site_is_built_from_changes():
+    """A source missing from the workflow's `paths` means editing it never redeploys the site: the
+    Maintaining page went stale that way when MAINTAINING.md was not in the list."""
+    import fnmatch
+
+    import yaml
+
+    workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/docs.yml").read_text())
+    triggers = (
+        workflow.get("on") or workflow[True]
+    )  # YAML 1.1 reads a bare `on` as the boolean True
+    paths = triggers["push"]["paths"]
+
+    def watched(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pattern) for pattern in paths)
+
+    sources = [
+        "README.md",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        *gen_pages.FILE_PAGES,
+        *gen_pages.GUIDE_SOURCES,
+    ]
+    sources += [f"examples/{e.name}/README.md" for e in discover()]
+    sources += ["mkdocs.yml", "docs/gen_pages.py", "scripts/example_manifest.py"]
+    missing = [path for path in sources if not watched(path)]
+    assert not missing, (
+        f"docs.yml does not watch {missing}: editing them would not redeploy the site"
+    )

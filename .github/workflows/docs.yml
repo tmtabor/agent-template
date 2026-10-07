@@ -12,6 +12,8 @@ on:
       - "README.md"
       - "AGENTS.md"
       - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - "MAINTAINING.md"
       - "examples/**"
       - "scripts/example_manifest.py"
       - "pyproject.toml"
