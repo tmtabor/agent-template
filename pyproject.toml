@@ -55,7 +55,11 @@ target-version = "py313"
 # source. Linting them against this project's own known-first-party list
 # (which has no idea about a "web" package that doesn't exist here) produces
 # false-positive import-order errors having nothing to do with this repo.
-extend-exclude = [".agents/skills/*/assets"]
+#
+# Recorded runs (examples/*/sample_run.md) are what a real model produced, including code it wrote, so they
+# are kept verbatim. ruff formats Python inside Markdown, and would rewrite that code (say, its quotes),
+# which made `ruff format --check` fail in CI after the code_mode transcript was re-recorded.
+extend-exclude = [".agents/skills/*/assets", "examples/*/sample_run.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
