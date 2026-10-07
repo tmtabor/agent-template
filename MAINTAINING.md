@@ -35,10 +35,13 @@ Things to know:
 
 ## Cutting a release
 
-1. Run the release check (above) with `--record` and commit the transcripts and `badges/coverage.json`.
+1. Run the release check (above) with `--record`.
 2. Bump `version` in `pyproject.toml` and run `uv lock`.
 3. In `CHANGELOG.md`, rename `[Unreleased]` to the new version with its date, add a fresh empty `[Unreleased]` above it, and update the compare links at the bottom. Every user-visible change should already have its line there; see [Changelog](AGENTS.md#changelog) in the design notes for what counts.
-4. Commit, tag `vX.Y.Z`, and push the commit and the tag.
+4. Run what CI runs: `uv run ruff check . && uv run ruff format --check . && uv run pytest`. The release check does not run lint or the format check, so this is where a formatting problem shows up before you push (a recording can contain code the model wrote, which is why `examples/*/sample_run.md` is excluded from ruff).
+5. Commit the transcripts, `badges/coverage.json`, the version bump and the changelog, push, and **wait for CI and the docs workflow to pass** on that commit.
+6. Tag that commit, not an earlier one, with an annotated tag, and push the tag: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
+7. Create the GitHub Release from the changelog section, so the notes cannot drift from it: `gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file <that section> --latest`.
 
 ## The documentation site
 
